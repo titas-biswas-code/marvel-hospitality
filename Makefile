@@ -1,0 +1,53 @@
+# Convenience targets. Each service still builds on its own (cd <service> && ./gradlew build) — ADR-0001.
+SERVICES := room-reservation-service bank-transfer-payment-service credit-card-payment-service notification-service
+ENV_FILE := infra/.env
+COMPOSE  := docker compose -f infra/docker-compose.yml --env-file $(ENV_FILE)
+KEYCLOAK := http://localhost:8180/realms/marvel/protocol/openid-connect/token
+
+# `USER` is also the shell's login name, so only a value given on the command line counts.
+TOKEN_USER := $(if $(filter command line,$(origin USER)),$(USER),alice)
+PASSWORD   ?= password
+CLIENT     ?= bank-simulator
+
+.PHONY: help build-all test-all up up-apps down logs reset token client-token
+
+help:
+	@echo "build-all | test-all | up | up-apps | down | logs | reset | token USER=alice | client-token CLIENT=bank-simulator"
+
+build-all:
+	@set -e; for s in $(SERVICES); do echo "==> $$s"; (cd $$s && ./gradlew build --console=plain); done
+
+test-all:
+	@set -e; for s in $(SERVICES); do echo "==> $$s"; (cd $$s && ./gradlew test --console=plain); done
+
+$(ENV_FILE):
+	cp infra/.env.example $(ENV_FILE)
+
+up: $(ENV_FILE)
+	$(COMPOSE) up -d --wait
+
+up-apps: $(ENV_FILE)
+	$(COMPOSE) --profile apps up -d --wait --build
+
+down: $(ENV_FILE)
+	$(COMPOSE) --profile apps down
+
+logs: $(ENV_FILE)
+	$(COMPOSE) --profile apps logs -f
+
+# Wipes every volume (Postgres, Kafka, Keycloak) and starts again. Keycloak re-imports
+# infra/keycloak/realm/marvel-realm.json only because its database is empty again.
+reset: $(ENV_FILE)
+	$(COMPOSE) --profile apps down -v --remove-orphans
+	$(COMPOSE) up -d --wait
+
+# Access token for a dev user (password grant via the public marvel-postman client).
+token:
+	@curl -sf -X POST $(KEYCLOAK) -d grant_type=password -d client_id=marvel-postman \
+	  -d username=$(TOKEN_USER) -d password=$(PASSWORD) | jq -r .access_token
+
+# Access token for a service-account client (client-credentials grant; secret from infra/.env).
+client-token: $(ENV_FILE)
+	@secret=$$(grep -E "^$$(echo $(CLIENT) | tr 'a-z-' 'A-Z_')_CLIENT_SECRET=" $(ENV_FILE) | cut -d= -f2-); \
+	  curl -sf -X POST $(KEYCLOAK) -d grant_type=client_credentials -d client_id=$(CLIENT) \
+	  -d client_secret=$$secret | jq -r .access_token

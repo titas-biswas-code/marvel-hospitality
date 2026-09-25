@@ -1,7 +1,7 @@
 # Security contract
 
 - IdP: Keycloak 26.x, realm `marvel`. Source of truth is `infra/keycloak/bootstrap.sh` (idempotent `kcadm.sh` script);
-  `infra/keycloak/export.sh` produces the committed `infra/keycloak/marvel-realm.json`, which compose imports with
+  `infra/keycloak/export.sh` produces the committed `infra/keycloak/realm/marvel-realm.json`, which compose imports with
   `--import-realm` (import runs only on an empty Keycloak DB — `make reset` wipes it).
 - Realm user-profile must have `unmanagedAttributePolicy: ENABLED` or the `properties` user attribute is dropped.
 - Issuer: `http://localhost:8180/realms/marvel` for tokens obtained from the host. Services run inside compose and set
