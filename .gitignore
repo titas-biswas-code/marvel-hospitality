@@ -1,0 +1,18 @@
+# OS / IDE
+.DS_Store
+.idea/
+*.iml
+.vscode/
+*.swp
+
+# Gradle (each service is a standalone build)
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Local environment — copied from infra/.env.example by `make up`; never commit real values
+infra/.env
+
+# Logs
+*.log
+infra/keycloak/.export/
