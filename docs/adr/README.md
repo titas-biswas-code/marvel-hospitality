@@ -5,7 +5,7 @@ unless stated. ADRs are numbered in the order the decisions were taken; later AD
 
 | # | Title |
 |---|---|
-| 0001 | Monorepo of independently deployable services, no shared code |
+| 0001 | Monorepo of independently deployable services, cross-cutting code in platform starters |
 | 0002 | Property as a first-class concept; property in path, entitlement in JWT |
 | 0003 | PostgreSQL, database-per-service, Flyway, and the Postgres features we lean on |
 | 0004 | Reservation state machine in code; statuses persisted as text; reference-data endpoint |

@@ -1,0 +1,20 @@
+description = 'Keycloak JWT resource server, role + property authorization, ProblemDetail 401/403, /whoami (ADR-0012)'
+
+ext {
+    springdocVersion = '3.1.1'
+}
+
+dependencies {
+    // What every consuming service needs to be a resource server; exposed transitively on purpose.
+    api 'org.springframework.boot:spring-boot-starter-security-oauth2-resource-server'
+    api 'org.springframework.boot:spring-boot-starter-webmvc'
+    // Only used when the service has springdoc on its classpath (bearer "Authorize" button).
+    compileOnly "org.springdoc:springdoc-openapi-starter-webmvc-ui:${springdocVersion}"
+    annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-security-oauth2-resource-server-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
+    testImplementation "org.springdoc:springdoc-openapi-starter-webmvc-ui:${springdocVersion}"
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}

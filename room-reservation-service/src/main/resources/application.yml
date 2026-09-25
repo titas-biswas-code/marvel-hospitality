@@ -23,6 +23,24 @@ spring:
     admin:
       # Topics are created by infra/kafka-init, never by the application (contracts/events.md).
       auto-create: false
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # issuer-uri: the `iss` every token must carry. Keycloak mints it from KC_HOSTNAME, i.e. the host URL,
+          # whichever network path the token was requested through (infra/README.md "Keycloak hostname / issuer").
+          # jwk-set-uri: where signing keys are fetched. Setting it means Boot builds the decoder from the key set
+          # and never calls OIDC discovery; the issuer is still validated. Default = IDE run on the host; the
+          # `local` profile (inside compose) overrides only jwk-set-uri to the compose-internal Keycloak URL.
+          issuer-uri: ${JWT_ISSUER_URI:http://localhost:8180/realms/marvel}
+          jwk-set-uri: ${JWT_JWK_SET_URI:http://localhost:8180/realms/marvel/protocol/openid-connect/certs}
+
+marvel:
+  security:
+    # platform/security-starter: the contract's public paths are built in; this service adds its own.
+    additional-public-paths: /reference-data
+    # Browser origins allowed to call this API cross-origin (the unified Swagger UI in infra/). Empty = no CORS.
+    cors-allowed-origins: ${CORS_ALLOWED_ORIGINS:}
 
 management:
   endpoints:
@@ -53,6 +71,16 @@ spring:
     url: ${DB_URL:jdbc:postgresql://postgres:5432/reservation}
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:9092}
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Keys over the compose network; `iss` still has to be the host URL above (it is what Keycloak mints).
+          jwk-set-uri: ${JWT_JWK_SET_URI:http://keycloak:8080/realms/marvel/protocol/openid-connect/certs}
+
+marvel:
+  security:
+    cors-allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:8088}
 
 logging:
   structured:

@@ -1,0 +1,12 @@
+plugins {
+    // Downloads the Java 25 toolchain when the host JDK is older.
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
+}
+
+// Cross-cutting libraries shared by the services (ADR-0001). Services consume them as source through a Gradle
+// composite build (`includeBuild('../platform')`), so a clean clone builds with no publishing step. Each module's
+// Gradle project name is its artifact id; the composite build substitutes `com.marvel.hospitality:<artifact>`.
+rootProject.name = 'marvel-platform'
+
+include 'security-starter'
+project(':security-starter').name = 'marvel-security-spring-boot-starter'

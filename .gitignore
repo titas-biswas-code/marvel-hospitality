@@ -8,6 +8,8 @@
 # Gradle (each service is a standalone build)
 .gradle/
 build/
+# IDE (VS Code / Eclipse) compiler output
+bin/
 !gradle/wrapper/gradle-wrapper.jar
 
 # Local environment — copied from infra/.env.example by `make up`; never commit real values

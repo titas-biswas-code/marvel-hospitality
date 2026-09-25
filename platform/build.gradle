@@ -1,0 +1,37 @@
+plugins {
+    id 'io.spring.dependency-management' version '1.1.7' apply false
+}
+
+// Shared settings for every platform module. Versions: docs/versions.md (same Boot BOM as the services).
+subprojects {
+    apply plugin: 'java-library'
+    apply plugin: 'io.spring.dependency-management'
+
+    group = 'com.marvel.hospitality'
+    version = '1.0.0'
+
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(25)
+        }
+    }
+
+    repositories {
+        mavenCentral()
+    }
+
+    dependencyManagement {
+        imports {
+            mavenBom 'org.springframework.boot:spring-boot-dependencies:4.1.1'
+        }
+    }
+
+    tasks.withType(JavaCompile).configureEach {
+        // Keep parameter names: @PreAuthorize("... #propertyId") and Spring binding rely on them.
+        options.compilerArgs << '-parameters'
+    }
+
+    tasks.named('test') {
+        useJUnitPlatform()
+    }
+}

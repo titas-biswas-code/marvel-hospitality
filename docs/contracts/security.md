@@ -9,7 +9,8 @@
   (Keycloak `KC_HOSTNAME=http://localhost:8180`, `KC_HOSTNAME_STRICT=false`, `KC_HTTP_ENABLED=true`).
 - Every service is an OAuth2 **resource server** (`spring.security.oauth2.resourceserver.jwt.issuer-uri`).
   No gateway in this repo (ADR-0012).
-- Realm roles (mapped into `realm_access.roles`, converted to `ROLE_*`/authorities by a custom converter):
+- Realm roles (mapped into `realm_access.roles`, converted by a custom converter into authorities with their raw
+  names, no `ROLE_` prefix; endpoints check them with `hasAuthority(...)`):
   `reservation:read`, `reservation:write`, `bank:ingest`, `bank:read`, `refund:execute`.
 - Custom claim `properties`: JSON array of propertyIds, from user attribute `properties` via a
   "User Attribute" protocol mapper (multivalued). Services enforce `propertyId ∈ properties` with a
