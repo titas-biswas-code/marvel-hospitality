@@ -1,0 +1,6 @@
+plugins {
+    // Downloads the Java 25 toolchain when the host JDK is older.
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
+}
+
+rootProject.name = 'credit-card-payment-service'

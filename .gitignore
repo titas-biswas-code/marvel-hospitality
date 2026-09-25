@@ -15,4 +15,3 @@ infra/.env
 
 # Logs
 *.log
-infra/keycloak/.export/
