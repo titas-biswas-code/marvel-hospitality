@@ -8,6 +8,7 @@ import com.marvel.hospitality.reservation.application.RoomUnavailableException;
 import com.marvel.hospitality.reservation.domain.PaymentMode;
 import com.marvel.hospitality.reservation.domain.Reservation;
 import com.marvel.hospitality.reservation.domain.ReservationId;
+import com.marvel.hospitality.reservation.domain.ReservationState;
 import com.marvel.hospitality.reservation.domain.StayPeriod;
 import jakarta.persistence.EntityManager;
 import java.util.Optional;
@@ -64,6 +65,23 @@ class JpaReservationRepositoryAdapter implements ReservationRepository {
             }
             throw ex;
         }
+    }
+
+    @Override
+    public Optional<Reservation> findForUpdate(ReservationId reservationId) {
+        return jpaRepository.findByReservationId(reservationId.value())
+                .map(entity -> Reservation.rehydrate(entity.toDomainState()));
+    }
+
+    @Override
+    public void update(Reservation reservation) {
+        ReservationState state = reservation.snapshot();
+        ReservationEntity entity = entityManager.find(ReservationEntity.class, state.id());
+        if (entity == null) {
+            throw new IllegalStateException("Reservation " + state.reservationId() + " does not exist; use add()");
+        }
+        entity.applyChanges(state);
+        entityManager.flush();
     }
 
     @Override

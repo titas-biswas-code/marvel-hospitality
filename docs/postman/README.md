@@ -34,11 +34,32 @@ the stub (command in its description) to see the connection-failure path instead
 directly, without a token (the spec declares no security, ADR-0011); it uses the `credit_card_url` environment
 variable.
 
+## Demo: bank transfer paid in two parts
+
+The folder **"Demo: bank transfer paid in two parts"** is the payment-matching flow end to end, meant for the Collection
+Runner (run the folder, top to bottom). It includes its own token requests, so it switches between alice (books,
+reads) and the bank-simulator (pays) by itself:
+
+1. alice books room 202 for 2 nights (240.00, `BANK_TRANSFER`) on a random date in 2030–2039, so the folder can be
+   re-run without `409 ROOM_UNAVAILABLE`; saves `reservationId`.
+2. The bank pays 120.00 with remittance `1401541457 <reservationId>` → the reservation is still `PENDING_PAYMENT`,
+   `amountReceived` 120.00.
+3. The bank pays the other 120.00 → `CONFIRMED`, 240.00; `…/payments` lists `MATCHED_PARTIAL` then `MATCHED_FULL`.
+
+Payments are applied asynchronously (outbox → Debezium → Kafka → reservation service), so the two reservation checks
+retry for up to ~10 s instead of assuming a fixed delay. The **Unmatched payments** folder lists payments that could
+not be applied: `GET /unmatched-payments` needs `bank:read` (alice, bob, carol have it) and shows payments that name
+no known reservation; `GET /properties/AMS01/unmatched-payments` shows the property's payments that arrived after a
+reservation was cancelled or already paid.
+
 ## Newman (CLI)
 
 ```
 npx --yes newman run docs/postman/marvel-hospitality.postman_collection.json \
   -e docs/postman/local.postman_environment.json --folder Auth
+
+npx --yes newman run docs/postman/marvel-hospitality.postman_collection.json \
+  -e docs/postman/local.postman_environment.json --folder "Demo: bank transfer paid in two parts"
 ```
 
 Run against a live `infra` (`make up`) to get real tokens; against the application folders it also needs

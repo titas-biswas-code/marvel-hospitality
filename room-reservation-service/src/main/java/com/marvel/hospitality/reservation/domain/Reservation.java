@@ -20,10 +20,12 @@ import org.jspecify.annotations.Nullable;
  * PENDING_PAYMENT -&gt; CANCELLED         payment deadline missed
  * anything else   -&gt; IllegalStateTransitionException
  * </pre>
- * {@link #confirm}, {@link #cancel} and {@link #recordPayment} are the only mutators; {@link #confirm} and
- * {@link #cancel} each record a {@link ReservationStatusChanged} domain event that the application layer
- * turns into an outbox row in the same transaction. No Spring Statemachine: three states and four transitions
- * do not justify a framework.
+ * {@link #confirm}, {@link #cancel}, {@link #recordPartialPayment} and {@link #confirmPayment} are the only
+ * mutators; each records a {@link ReservationStatusChanged} domain event that the application layer turns into
+ * an outbox row in the same transaction. The two payment mutators are how a matched bank transfer reaches the
+ * aggregate: {@link PaymentMatcher} decides the outcome (ADR-0009), the aggregate sets the new
+ * {@code amountReceived} and records the event carrying it. No Spring Statemachine: three states and four
+ * transitions do not justify a framework.
  */
 public final class Reservation {
 
@@ -173,20 +175,58 @@ public final class Reservation {
     }
 
     /**
-     * Bookkeeping only in this PR: matching outcomes and the resulting events/status changes arrive in PR-05
-     * (ADR-0009). This just accumulates {@code amountReceived}; it never changes status and never records an
-     * event, because "money arrived" and "what that means for the reservation" are deliberately separated.
+     * Records that a bank-transfer payment landed but the reservation's total is still not fully covered
+     * (ADR-0009: {@code MATCHED_PARTIAL}). Status does not change — only {@link #confirmPayment} confirms —
+     * but a {@link ReservationStatusChanged} is still recorded with {@code previousStatus == status} so
+     * customers are told money arrived (events.md).
+     *
+     * @param amountReceived the reservation's new <em>total</em> received (not just this payment); must be
+     *     strictly between the current {@link #amountReceived()} and {@link #totalAmount()}
+     * @throws IllegalStateTransitionException if the reservation is not {@code PENDING_PAYMENT}
+     * @throws IllegalArgumentException if {@code amountReceived} is not strictly greater than the current
+     *     amount received, or not strictly less than {@link #totalAmount()}
      */
-    public void recordPayment(Money amount, Clock clock) {
-        Objects.requireNonNull(amount, "amount");
-        if (!amount.isPositive()) {
-            throw new IllegalArgumentException("amount must be positive: " + amount);
+    public void recordPartialPayment(Money amountReceived, Clock clock) {
+        Objects.requireNonNull(amountReceived, "amountReceived");
+        Objects.requireNonNull(clock, "clock");
+        if (status != ReservationStatus.PENDING_PAYMENT) {
+            throw new IllegalStateTransitionException(status, status);
+        }
+        if (!amountReceived.isGreaterThan(this.amountReceived)) {
+            throw new IllegalArgumentException(
+                    "amountReceived must be greater than the current amount received: " + amountReceived + " <= " + this.amountReceived);
+        }
+        if (!amountReceived.isLessThan(totalAmount)) {
+            throw new IllegalArgumentException("amountReceived must be less than totalAmount: " + amountReceived + " >= " + totalAmount);
+        }
+        Instant now = Instant.now(clock);
+        this.amountReceived = amountReceived;
+        this.updatedAt = now;
+        recordEvent(status, status, StatusChangeReason.PARTIAL_PAYMENT_RECEIVED, now);
+    }
+
+    /**
+     * Records the payment that covers the reservation in full and performs the {@code PENDING_PAYMENT ->
+     * CONFIRMED} transition (ADR-0009: {@code MATCHED_FULL}/{@code OVERPAID} both confirm). The amount is set
+     * before the transition so the {@link ReservationStatusChanged} recorded by {@link #transition} carries the
+     * new {@code amountReceived}; the status guard runs first so a rejected call leaves the aggregate
+     * completely unchanged, matching {@link #confirm} and {@link #cancel}.
+     *
+     * @param amountReceived the reservation's new total received; must be at least {@link #totalAmount()}
+     * @throws IllegalStateTransitionException if the reservation is not {@code PENDING_PAYMENT}
+     * @throws IllegalArgumentException if {@code amountReceived} is less than {@link #totalAmount()}
+     */
+    public void confirmPayment(Money amountReceived, Clock clock) {
+        Objects.requireNonNull(amountReceived, "amountReceived");
+        Objects.requireNonNull(clock, "clock");
+        if (amountReceived.isLessThan(totalAmount)) {
+            throw new IllegalArgumentException("amountReceived must be at least totalAmount: " + amountReceived + " < " + totalAmount);
         }
         if (status != ReservationStatus.PENDING_PAYMENT) {
-            throw new IllegalStateException("Cannot record a payment for a reservation in status " + status);
+            throw new IllegalStateTransitionException(status, ReservationStatus.CONFIRMED);
         }
-        this.amountReceived = amountReceived.plus(amount);
-        this.updatedAt = Instant.now(clock);
+        this.amountReceived = amountReceived;
+        transition(ReservationStatus.CONFIRMED, null, StatusChangeReason.PAYMENT_RECEIVED, clock);
     }
 
     /** Returns and clears the events recorded since the last call — the application layer's outbox source. */

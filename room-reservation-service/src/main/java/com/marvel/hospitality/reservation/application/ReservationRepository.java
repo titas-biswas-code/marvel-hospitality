@@ -18,6 +18,21 @@ public interface ReservationRepository {
      */
     void add(Reservation reservation);
 
+    /**
+     * Loads a reservation by its business id alone and locks its row ({@code SELECT ... FOR UPDATE}) until the
+     * caller's transaction ends. Not scoped by property: the bank topic carries none, and reservation ids are
+     * globally unique (identifiers.md). Two payments for the same reservation arrive under different keys
+     * ({@code paymentId}), possibly on different partitions and consumer threads; the lock makes the second wait
+     * for the first to commit, so the sum it reads already includes the first payment (ADR-0009).
+     */
+    Optional<Reservation> findForUpdate(ReservationId reservationId);
+
+    /**
+     * Writes back the mutable state of a reservation loaded in the same transaction and flushes. The {@code @Version}
+     * check still applies, as a second line of defence behind {@link #findForUpdate}'s lock.
+     */
+    void update(Reservation reservation);
+
     /** Looks up by property <em>and</em> id, so a reservation of another property is simply not found. */
     Optional<Reservation> find(String propertyId, ReservationId reservationId);
 

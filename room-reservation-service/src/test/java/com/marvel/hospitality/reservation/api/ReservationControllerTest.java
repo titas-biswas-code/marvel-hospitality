@@ -18,6 +18,7 @@ import com.marvel.hospitality.reservation.application.PaymentReferenceAlreadyUse
 import com.marvel.hospitality.reservation.application.PaymentRejectedException;
 import com.marvel.hospitality.reservation.application.PaymentServiceUnavailableException;
 import com.marvel.hospitality.reservation.application.PropertyNotFoundException;
+import com.marvel.hospitality.reservation.application.ReceivedPaymentQueries;
 import com.marvel.hospitality.reservation.application.ReservationNotFoundException;
 import com.marvel.hospitality.reservation.application.ReservationView;
 import com.marvel.hospitality.reservation.application.RoomNotFoundException;
@@ -33,6 +34,7 @@ import com.marvel.hospitality.reservation.domain.PaymentDeadlinePolicy;
 import com.marvel.hospitality.reservation.domain.PaymentMatchOutcome;
 import com.marvel.hospitality.reservation.domain.PaymentMode;
 import com.marvel.hospitality.reservation.domain.Property;
+import com.marvel.hospitality.reservation.domain.ReceivedPayment;
 import com.marvel.hospitality.reservation.domain.RefundReason;
 import com.marvel.hospitality.reservation.domain.Reservation;
 import com.marvel.hospitality.reservation.domain.ReservationId;
@@ -87,6 +89,9 @@ class ReservationControllerTest {
 
     @MockitoBean
     private GetReservationUseCase getReservationUseCase;
+
+    @MockitoBean
+    private ReceivedPaymentQueries receivedPaymentQueries;
 
     private static SecurityMockMvcRequestPostProcessors.JwtRequestPostProcessor writeJwt() {
         return jwt().authorities(new SimpleGrantedAuthority("reservation:write"))
@@ -417,5 +422,67 @@ class ReservationControllerTest {
                         .content(validCashRequestJson()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("PROPERTY_NOT_FOUND"));
+    }
+
+    private static ReceivedPayment matchedPayment() {
+        return new ReceivedPayment(
+                "5c0c1e4e-3d2a-4b6f-9c1e-0a1b2c3d4e5f",
+                ReservationId.of("P4145478"),
+                "AMS01",
+                "NL91ABNA0417164300",
+                Money.eur("120.00"),
+                "1401541457 P4145478",
+                "1401541457",
+                PaymentMatchOutcome.MATCHED_PARTIAL,
+                Instant.parse("2026-10-01T09:15:02Z"));
+    }
+
+    @Test
+    void listsPaymentsOfReservation() throws Exception {
+        given(receivedPaymentQueries.ofReservation("AMS01", "P4145478")).willReturn(List.of(matchedPayment()));
+
+        MvcResult result = mvc.perform(get("/properties/AMS01/reservations/P4145478/payments").with(readJwt()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].paymentId").value("5c0c1e4e-3d2a-4b6f-9c1e-0a1b2c3d4e5f"))
+                .andExpect(jsonPath("$[0].reservationId").value("P4145478"))
+                .andExpect(jsonPath("$[0].propertyId").value("AMS01"))
+                .andExpect(jsonPath("$[0].currency").value("EUR"))
+                .andExpect(jsonPath("$[0].outcome").value("MATCHED_PARTIAL"))
+                .andExpect(jsonPath("$[0].transactionDescription").value("1401541457 P4145478"))
+                .andExpect(jsonPath("$[0].debtorAccountNumber").value("NL91ABNA0417164300"))
+                .andExpect(jsonPath("$[0].receivedAt").value("2026-10-01T09:15:02Z"))
+                .andReturn();
+
+        // Jackson 3 + spring.jackson.write.write-bigdecimal-as-plain=true (ADR-0016): never 1.2E+2.
+        assertThat(result.getResponse().getContentAsString()).contains("\"amount\":120.00");
+    }
+
+    @Test
+    void paymentsOfUnknownReservationIsNotFound() throws Exception {
+        given(receivedPaymentQueries.ofReservation("AMS01", "P4145478"))
+                .willThrow(new ReservationNotFoundException("AMS01", "P4145478"));
+
+        mvc.perform(get("/properties/AMS01/reservations/P4145478/payments").with(readJwt()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RESERVATION_NOT_FOUND"));
+    }
+
+    @Test
+    void paymentsRequireReadRole() throws Exception {
+        mvc.perform(get("/properties/AMS01/reservations/P4145478/payments").with(writeJwt()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        verifyNoInteractions(receivedPaymentQueries);
+    }
+
+    @Test
+    void paymentsOfAnotherPropertyIsForbidden() throws Exception {
+        // readJwt() is entitled to AMS01 only; asking for RTM01's payments must not even reach the query.
+        mvc.perform(get("/properties/RTM01/reservations/P4145478/payments").with(readJwt()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN_PROPERTY"));
+
+        verifyNoInteractions(receivedPaymentQueries);
     }
 }

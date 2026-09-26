@@ -65,8 +65,10 @@ make reset                     # wipes ALL volumes (postgres, kafka, keycloak) a
   idempotent `PUT /connectors/<name>/config` for every file in `infra/debezium/` and waits until each connector
   and its task are `RUNNING`. It runs only after both outbox services are healthy, because a connector's
   filtered publication needs the `outbox_event` table their Flyway migrations create. Rows written before it
-  runs are not lost: the connector's initial snapshot publishes them. Re-run by hand (e.g. after editing a
-  connector JSON, or when the services run from the IDE instead of compose):
+  runs are not lost: the connector's initial snapshot publishes them. `make up-apps` runs it in the foreground
+  after everything else is healthy (`up --wait` would count its normal exit as a failure), so a connector that
+  does not reach `RUNNING` fails the make target. Re-run by hand (e.g. after editing a connector JSON, or when
+  the services run from the IDE instead of compose):
   `docker compose -f infra/docker-compose.yml --env-file infra/.env run --rm --no-deps connect-init`.
 
 - **keycloak** (`quay.io/keycloak/keycloak:26.7.4`): IdP for the `marvel` realm. Started with

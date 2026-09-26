@@ -21,7 +21,10 @@ import com.marvel.hospitality.reservation.domain.ReservationStatus;
 import com.marvel.hospitality.reservation.domain.Room;
 import com.marvel.hospitality.reservation.domain.RoomSegment;
 import com.marvel.hospitality.reservation.domain.StayPeriod;
+import jakarta.persistence.OptimisticLockException;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.Optional;
@@ -30,8 +33,8 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.BooleanSupplier;
 import org.jspecify.annotations.Nullable;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
@@ -41,6 +44,7 @@ import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabas
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -60,7 +64,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ImportAutoConfiguration(FlywayAutoConfiguration.class)
-@Import({TestcontainersConfiguration.class, JpaReservationRepositoryAdapter.class, JpaPropertyCatalogAdapter.class})
+@Import({TestcontainersConfiguration.class, JpaReservationRepositoryAdapter.class, JpaPropertyCatalogAdapter.class,
+        JpaReceivedPaymentRepositoryAdapter.class})
 class ReservationPersistenceTest {
 
     private static final Instant SOME_INSTANT = Instant.parse("2026-09-26T10:00:00Z");
@@ -239,6 +244,128 @@ class ReservationPersistenceTest {
     }
 
     @Test
+    void findForUpdateFindsByReservationIdAcrossProperties() {
+        reservations.add(reservation("P0000954", "RTM01", "101", LocalDate.parse("2036-01-05"), LocalDate.parse("2036-01-08")));
+
+        // findForUpdate takes only the business id (ADR-0009: the bank topic carries no propertyId), unlike
+        // find(propertyId, reservationId) which is scoped.
+        Optional<Reservation> found = reservations.findForUpdate(ReservationId.of("P0000954"));
+
+        assertThat(found).isPresent();
+        assertThat(found.get().propertyId()).isEqualTo("RTM01");
+    }
+
+    @Test
+    void updateWritesMutableStateAndBumpsVersion() {
+        String reservationId = "P0000952";
+        reservations.add(reservation(reservationId, "AMS01", "102", LocalDate.parse("2036-01-01"), LocalDate.parse("2036-01-04"),
+                ReservationStatus.PENDING_PAYMENT, PaymentMode.BANK_TRANSFER, "some-reference"));
+
+        Reservation loaded = reservations.findForUpdate(ReservationId.of(reservationId)).orElseThrow();
+        assertThat(loaded.version()).isEqualTo(0L);
+        loaded.recordPartialPayment(Money.eur("100.00"), Clock.systemUTC());
+        reservations.update(loaded);
+
+        Reservation reloaded = reservations.find("AMS01", ReservationId.of(reservationId)).orElseThrow();
+        assertThat(reloaded.amountReceived()).isEqualTo(Money.eur("100.00"));
+        assertThat(reloaded.status()).isEqualTo(ReservationStatus.PENDING_PAYMENT);
+        assertThat(reloaded.version()).isEqualTo(1L);
+    }
+
+    /**
+     * Two independent snapshots of the same row (version 0), both loaded before either is written back: the second
+     * {@link ReservationRepository#update} must be rejected rather than silently overwrite the first payment. Each
+     * snapshot is loaded and written back in its own {@code PROPAGATION_REQUIRES_NEW} transaction — a genuinely new
+     * connection and persistence context each time — because two loads sharing the {@code @DataJpaTest} slice's
+     * single test-managed transaction would share one Hibernate first-level cache: the second load would return the
+     * very same managed entity the first load (and any update through it) already mutated, so it could never look
+     * stale. {@code REQUIRES_NEW} always opens and really commits its own transaction, whether or not the ambient
+     * test-managed transaction is present, so no {@code @Transactional(NOT_SUPPORTED)} is needed here (unlike
+     * {@link #findForUpdateLocksTheRow}, where the row also has to be visible to a genuinely separate thread).
+     */
+    @Test
+    void updateRejectsAStaleSnapshot() {
+        String reservationId = "P0000953";
+        TransactionTemplate requiresNew = new TransactionTemplate(transactionManager);
+        requiresNew.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        try {
+            requiresNew.executeWithoutResult(status -> reservations.add(
+                    reservation(reservationId, "AMS01", "201", LocalDate.parse("2036-01-11"), LocalDate.parse("2036-01-13"),
+                            ReservationStatus.PENDING_PAYMENT, PaymentMode.BANK_TRANSFER, "some-reference")));
+
+            Reservation snapshotA = requiresNew.execute(status ->
+                    reservations.findForUpdate(ReservationId.of(reservationId)).orElseThrow());
+            Reservation snapshotB = requiresNew.execute(status ->
+                    reservations.findForUpdate(ReservationId.of(reservationId)).orElseThrow());
+            assertThat(snapshotA.version()).isEqualTo(0L);
+            assertThat(snapshotB.version()).isEqualTo(0L);
+
+            snapshotA.recordPartialPayment(Money.eur("50.00"), Clock.systemUTC());
+            requiresNew.executeWithoutResult(status -> reservations.update(snapshotA));
+
+            snapshotB.recordPartialPayment(Money.eur("60.00"), Clock.systemUTC());
+            // Observed, not assumed: this is the raw jakarta.persistence.OptimisticLockException that
+            // ReservationEntity.applyChanges throws itself, not a Spring Data wrapper. Even though
+            // JpaReservationRepositoryAdapter is a @Repository, Spring's exception translation apparently does not
+            // rewrite it here — most likely because nothing in this call path ever reaches Hibernate (the manual
+            // version check runs, and throws, before entityManager.flush() executes any SQL), so callers of
+            // ReservationRepository#update must be ready to catch the plain JPA exception, not Spring's.
+            assertThatThrownBy(() -> requiresNew.executeWithoutResult(status -> reservations.update(snapshotB)))
+                    .isInstanceOf(OptimisticLockException.class)
+                    .hasMessageContaining(reservationId);
+        } finally {
+            // Real commits (REQUIRES_NEW), unlike the rest of this class's rollback-only test transaction: clean up
+            // explicitly so a reused container does not see a duplicate reservation_id on the next run.
+            requiresNew.executeWithoutResult(status ->
+                    jdbc.sql("DELETE FROM reservation WHERE reservation_id = :id").param("id", reservationId).update());
+        }
+    }
+
+    /**
+     * Proves {@link ReservationRepository#findForUpdate} really takes {@code SELECT ... FOR UPDATE}, not just a
+     * plain read: while a holder thread keeps a real, open transaction on the row, a second, completely independent
+     * session's {@code SELECT ... FOR UPDATE NOWAIT} on that same row must fail immediately with SQLSTATE
+     * {@code 55P03} (lock_not_available) rather than block or succeed.
+     *
+     * <p>Runs with the test's own (rollback-only) transaction suspended, like
+     * {@link #concurrentInsertsForSameRoomOnlyOneSucceeds}: the row must be really committed (not just present in
+     * this test method's uncommitted transaction) before the holder thread's independent session can even see it.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void findForUpdateLocksTheRow() throws InterruptedException {
+        TransactionTemplate transactions = new TransactionTemplate(transactionManager);
+        String reservationId = "P0000955";
+        transactions.executeWithoutResult(status -> reservations.add(
+                reservation(reservationId, "AMS01", "101", LocalDate.parse("2036-01-20"), LocalDate.parse("2036-01-25"))));
+
+        CountDownLatch locked = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+
+        Thread holder = new Thread(() -> transactions.executeWithoutResult(status -> {
+            reservations.findForUpdate(ReservationId.of(reservationId));
+            locked.countDown();
+            await(release);
+        }), "find-for-update-holder");
+
+        try {
+            holder.start();
+            assertThat(locked.await(5, TimeUnit.SECONDS)).as("holder thread acquired the row lock").isTrue();
+
+            assertThatThrownBy(() -> jdbc.sql("SELECT 1 FROM reservation WHERE reservation_id = :id FOR UPDATE NOWAIT")
+                    .param("id", reservationId)
+                    .query(Integer.class)
+                    .single())
+                    .matches(ex -> ConstraintNames.sqlState(ex).orElse("").equals("55P03"),
+                            "carries SQLSTATE 55P03 (lock_not_available)");
+        } finally {
+            release.countDown();
+            holder.join(5000);
+            jdbc.sql("DELETE FROM reservation WHERE reservation_id = :id").param("id", reservationId).update();
+        }
+    }
+
+    @Test
     void propertyCatalogReadsSeedReferenceData() {
         Optional<Property> property = catalog.findProperty("AMS01");
         assertThat(property).contains(new Property("AMS01", "Marvel Amsterdam", ZoneId.of("Europe/Amsterdam"), "NL00MARV0000000001"));
@@ -303,8 +430,9 @@ class ReservationPersistenceTest {
             assertThat(bAboutToInsert.await(5, TimeUnit.SECONDS)).isTrue();
             // Let A commit only once B is really blocked inside Postgres, waiting on A's uncommitted row
             // (ADR-0005): an ungranted lock is the database-visible signal of that wait.
-            assertThat(waitUntil(() -> jdbc.sql("SELECT count(*) FROM pg_locks WHERE NOT granted")
-                    .query(Integer.class).single() > 0)).as("B blocked on A's uncommitted row").isTrue();
+            Awaitility.await("B blocked on A's uncommitted row").atMost(Duration.ofSeconds(5))
+                    .until(() -> jdbc.sql("SELECT count(*) FROM pg_locks WHERE NOT granted")
+                            .query(Integer.class).single() > 0);
             releaseA.countDown();
             threadA.join(5000);
             threadB.join(5000);
@@ -316,17 +444,6 @@ class ReservationPersistenceTest {
             releaseA.countDown();
             jdbc.sql("DELETE FROM reservation WHERE reservation_id IN ('P00000A0', 'P00000B0')").update();
         }
-    }
-
-    private static boolean waitUntil(BooleanSupplier condition) throws InterruptedException {
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-        while (System.nanoTime() < deadline) {
-            if (condition.getAsBoolean()) {
-                return true;
-            }
-            Thread.sleep(20);
-        }
-        return false;
     }
 
     private static void await(CountDownLatch latch) {

@@ -66,7 +66,24 @@ Response `201 Created`, `Location: /properties/{propertyId}/reservations/{reserv
 Role `reservation:read`. Same body as above. `404 RESERVATION_NOT_FOUND` (also when it exists under another property).
 
 ### GET /properties/{propertyId}/reservations/{reservationId}/payments
-Role `reservation:read`. List of `received_payment` rows for the reservation (paymentId, amount, outcome, receivedAt).
+Role `reservation:read`. `404 RESERVATION_NOT_FOUND` (also when it exists under another property). List of
+`received_payment` rows for the reservation, most recent last:
+```json
+[
+  {
+    "paymentId": "5c0c1e4e-3d2a-4b6f-9c1e-0a1b2c3d4e5f",
+    "reservationId": "P4145478",
+    "propertyId": "AMS01",
+    "amount": 120.00,
+    "currency": "EUR",
+    "outcome": "MATCHED_PARTIAL",
+    "transactionDescription": "1401541457 P4145478",
+    "debtorAccountNumber": "NL91ABNA0417164300",
+    "receivedAt": "2026-10-01T09:15:02Z"
+  }
+]
+```
+`reservationId`/`propertyId` are only `null` for the two outcomes below that never resolve to a reservation.
 
 ### GET /reference-data
 No auth. Seeds UIs so they never hardcode enums:
@@ -82,8 +99,20 @@ No auth. Seeds UIs so they never hardcode enums:
 ```
 Values come from the Java enums via `Enum.values()` (single source of truth).
 
-### GET /properties/{propertyId}/unmatched-payments (BONUS, PR-05 if time)
-Role `reservation:read`. Reconciliation view of payments with `UNMATCHED_*` outcome.
+### GET /properties/{propertyId}/unmatched-payments
+Role `reservation:read` + property check (`404 PROPERTY_NOT_FOUND` if the property does not exist). Reconciliation
+view of that property's `UNMATCHED_NOT_PENDING` payments: money that arrived for one of its reservations after the
+reservation stopped awaiting payment (cancelled, or already confirmed by another payment). These are refunded
+automatically (a `RefundRequested` is raised for the full amount, ADR-0009); this endpoint just lets staff follow
+up on why they happened. Same response shape as `.../payments` above.
+
+### GET /unmatched-payments
+Role `bank:read`, **no property check**. Reconciliation view of `UNMATCHED_FORMAT` and `UNMATCHED_UNKNOWN_RESERVATION`
+payments: the bank's transaction event carries no `propertyId`, so a payment that never resolved to a reservation
+belongs to no property and cannot be property-checked. It is guarded by `bank:read` instead — the same role that
+already grants property-less bank data (`GET /bank-transactions/{paymentId}` on the payment service). These rows are
+**not** refunded automatically: a typo in the transfer description could still be reconciled by a human (ADR-0009).
+Same response shape as `.../payments` above, with `reservationId` and `propertyId` both `null`.
 
 Error codes: `VALIDATION_FAILED` 400, `ROOM_NOT_FOUND` 404, `RESERVATION_NOT_FOUND` 404,
 `PROPERTY_NOT_FOUND` 404, `ROOM_UNAVAILABLE` 409, `PAYMENT_REFERENCE_ALREADY_USED` 409, `ROOM_SEGMENT_MISMATCH` 422,

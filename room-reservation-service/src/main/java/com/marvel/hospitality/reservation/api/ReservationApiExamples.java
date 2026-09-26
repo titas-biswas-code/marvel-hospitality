@@ -237,6 +237,61 @@ final class ReservationApiExamples {
               "code": "UNAUTHENTICATED"
             }""";
 
+    static final String RECEIVED_PAYMENTS_RESPONSE = """
+            [
+              {
+                "paymentId": "5c0c1e4e-3d2a-4b6f-9c1e-0a1b2c3d4e5f",
+                "reservationId": "P4145478",
+                "propertyId": "AMS01",
+                "amount": 120.00,
+                "currency": "EUR",
+                "outcome": "MATCHED_PARTIAL",
+                "transactionDescription": "1401541457 P4145478",
+                "debtorAccountNumber": "NL91ABNA0417164300",
+                "receivedAt": "2026-10-01T09:15:02Z"
+              }
+            ]""";
+
+    static final String NOT_PENDING_PAYMENTS_RESPONSE = """
+            [
+              {
+                "paymentId": "6d1d2f5f-4e3b-5c7f-ad2f-1b2c3d4e5f6a",
+                "reservationId": "P4145478",
+                "propertyId": "AMS01",
+                "amount": 240.00,
+                "currency": "EUR",
+                "outcome": "UNMATCHED_NOT_PENDING",
+                "transactionDescription": "1401541457 P4145478",
+                "debtorAccountNumber": "NL91ABNA0417164300",
+                "receivedAt": "2026-10-05T09:15:02Z"
+              }
+            ]""";
+
+    static final String PAYMENTS_WITHOUT_RESERVATION_RESPONSE = """
+            [
+              {
+                "paymentId": "7e2e3f6f-5f4c-6d8f-be3f-2c3d4e5f6a7b",
+                "reservationId": null,
+                "propertyId": null,
+                "amount": 50.00,
+                "currency": "EUR",
+                "outcome": "UNMATCHED_FORMAT",
+                "transactionDescription": "thank you",
+                "debtorAccountNumber": "NL91ABNA0417164300",
+                "receivedAt": "2026-10-06T09:15:02Z"
+              }
+            ]""";
+
+    static final String PROPERTY_NOT_FOUND_UNMATCHED_EXAMPLE = """
+            {
+              "type": "https://marvel-hospitality/problems/PROPERTY_NOT_FOUND",
+              "title": "Not Found",
+              "status": 404,
+              "detail": "Property AMS01 does not exist.",
+              "instance": "/properties/AMS01/unmatched-payments",
+              "code": "PROPERTY_NOT_FOUND"
+            }""";
+
     static final String REFERENCE_DATA_RESPONSE = """
             {
               "reservationStatuses": ["PENDING_PAYMENT","CONFIRMED","CANCELLED"],

@@ -18,6 +18,8 @@ dependencies {
     testFixturesApi 'org.testcontainers:testcontainers-kafka'
     testFixturesApi 'org.apache.kafka:kafka-clients'
     testFixturesImplementation 'org.springframework.boot:spring-boot-starter-jackson'
+    // Polls Kafka Connect's status without hand-written sleep loops.
+    testFixturesImplementation 'org.awaitility:awaitility'
 
     // No Boot 4 "-jdbc-test" starter exists (verified against the Gradle cache); spring-boot-starter-test is the
     // only source of JUnit 5 + AssertJ + Mockito for a plain JDBC starter.

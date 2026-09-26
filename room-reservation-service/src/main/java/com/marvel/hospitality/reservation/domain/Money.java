@@ -52,6 +52,15 @@ public record Money(BigDecimal amount, String currency) implements Comparable<Mo
         return new Money(amount.add(other.amount), currency);
     }
 
+    /**
+     * @throws IllegalArgumentException if {@code other} is greater than this amount — {@link Money} never
+     *     represents a negative value, so there is no signed "difference" variant of this operation.
+     */
+    public Money minus(Money other) {
+        requireSameCurrency(other);
+        return new Money(amount.subtract(other.amount), currency);
+    }
+
     public Money times(int nights) {
         return new Money(amount.multiply(BigDecimal.valueOf(nights)), currency);
     }

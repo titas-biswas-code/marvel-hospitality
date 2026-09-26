@@ -2,11 +2,13 @@ package com.marvel.hospitality.reservation.api;
 
 import com.marvel.hospitality.reservation.application.CreateReservationUseCase;
 import com.marvel.hospitality.reservation.application.GetReservationUseCase;
+import com.marvel.hospitality.reservation.application.ReceivedPaymentQueries;
 import com.marvel.hospitality.reservation.application.ReservationView;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.annotations.headers.Header;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -16,6 +18,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.net.URI;
+import java.util.List;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
@@ -40,10 +43,13 @@ class ReservationController {
 
     private final CreateReservationUseCase createReservationUseCase;
     private final GetReservationUseCase getReservationUseCase;
+    private final ReceivedPaymentQueries receivedPaymentQueries;
 
-    ReservationController(CreateReservationUseCase createReservationUseCase, GetReservationUseCase getReservationUseCase) {
+    ReservationController(CreateReservationUseCase createReservationUseCase, GetReservationUseCase getReservationUseCase,
+            ReceivedPaymentQueries receivedPaymentQueries) {
         this.createReservationUseCase = createReservationUseCase;
         this.getReservationUseCase = getReservationUseCase;
+        this.receivedPaymentQueries = receivedPaymentQueries;
     }
 
     @PostMapping
@@ -153,5 +159,36 @@ class ReservationController {
             @Parameter(in = ParameterIn.PATH, example = "AMS01") @PathVariable String propertyId,
             @Parameter(in = ParameterIn.PATH, example = "P4145478") @PathVariable String reservationId) {
         return ReservationResponse.from(getReservationUseCase.get(propertyId, reservationId));
+    }
+
+    @GetMapping("/{reservationId}/payments")
+    @PreAuthorize("hasAuthority('reservation:read') and @propertyAccess.allowed(#propertyId)")
+    @Operation(summary = "List the payments received for a reservation",
+            description = "Every received_payment row matched to this reservation (ADR-0009), in receipt order.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "OK",
+                    content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            array = @ArraySchema(schema = @Schema(implementation = ReceivedPaymentResponse.class)),
+                            examples = @ExampleObject(value = ReservationApiExamples.RECEIVED_PAYMENTS_RESPONSE))),
+            @ApiResponse(responseCode = "401", description = "UNAUTHENTICATED",
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ProblemDetail.class),
+                            examples = @ExampleObject(value = ReservationApiExamples.UNAUTHENTICATED_EXAMPLE))),
+            @ApiResponse(responseCode = "403", description = "FORBIDDEN (missing role) or FORBIDDEN_PROPERTY (property not in token)",
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ProblemDetail.class),
+                            examples = {
+                                    @ExampleObject(name = "FORBIDDEN", value = ReservationApiExamples.FORBIDDEN_EXAMPLE),
+                                    @ExampleObject(name = "FORBIDDEN_PROPERTY", value = ReservationApiExamples.FORBIDDEN_PROPERTY_EXAMPLE)})),
+            @ApiResponse(responseCode = "404", description = "RESERVATION_NOT_FOUND",
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ProblemDetail.class),
+                            examples = @ExampleObject(value = ReservationApiExamples.RESERVATION_NOT_FOUND_EXAMPLE)))})
+    List<ReceivedPaymentResponse> payments(
+            @Parameter(in = ParameterIn.PATH, example = "AMS01") @PathVariable String propertyId,
+            @Parameter(in = ParameterIn.PATH, example = "P4145478") @PathVariable String reservationId) {
+        return receivedPaymentQueries.ofReservation(propertyId, reservationId).stream()
+                .map(ReceivedPaymentResponse::from)
+                .toList();
     }
 }
