@@ -1,0 +1,51 @@
+package com.marvel.hospitality.reservation;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.regex.Pattern;
+import java.util.stream.Stream;
+import org.junit.jupiter.api.Test;
+
+/**
+ * Two project rules checked on the source tree, so they cannot erode silently: the domain stays plain Java, and
+ * "now" only ever comes from the injected {@code Clock}. A source scan is enough for rules this simple.
+ */
+class ArchitectureRulesTest {
+
+    private static final Path MAIN_SOURCES = Path.of("src/main/java/com/marvel/hospitality/reservation");
+    private static final Pattern FRAMEWORK_IMPORT =
+            Pattern.compile("^import (static )?(org\\.springframework|jakarta\\.persistence|org\\.hibernate)\\.", Pattern.MULTILINE);
+    private static final Pattern CLOCKLESS_NOW =
+            Pattern.compile("\\b(Instant|LocalDate|LocalDateTime|LocalTime|OffsetDateTime|ZonedDateTime)\\.now\\(\\s*\\)");
+
+    @Test
+    void domainHasNoSpringImports() throws IOException {
+        assertThat(filesMatching(MAIN_SOURCES.resolve("domain"), FRAMEWORK_IMPORT)).isEmpty();
+    }
+
+    @Test
+    void noDirectNowCallsOutsideClock() throws IOException {
+        assertThat(filesMatching(MAIN_SOURCES, CLOCKLESS_NOW)).isEmpty();
+    }
+
+    private static List<Path> filesMatching(Path root, Pattern pattern) throws IOException {
+        assertThat(root).isDirectory();
+        try (Stream<Path> files = Files.walk(root)) {
+            return files.filter(file -> file.toString().endsWith(".java"))
+                    .filter(file -> pattern.matcher(read(file)).find())
+                    .toList();
+        }
+    }
+
+    private static String read(Path file) {
+        try {
+            return Files.readString(file);
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+}

@@ -45,7 +45,17 @@ Source: https://github.com/spring-projects/spring-boot/wiki/Spring-Boot-4.0-Migr
   `@ServiceConnection` is still `org.springframework.boot.testcontainers.service.connection.ServiceConnection`.
 - `spring-boot-starter-security-oauth2-resource-server` — used from PR-01, together with the test starters
   `spring-boot-starter-security-oauth2-resource-server-test` and `spring-boot-starter-security-test`.
-- Jackson 3 lives under `tools.jackson.*`, not `com.fasterxml.jackson.*`.
+- `spring-boot-starter-data-jpa-test` (PR-02): `@DataJpaTest` is `org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest`.
+  Unlike Boot 3 it does **not** import Flyway, and its `@AutoConfigureTestDatabase`
+  (`org.springframework.boot.jdbc.test.autoconfigure`) defaults to replacing the DataSource; slice tests here add
+  `@AutoConfigureTestDatabase(replace = NONE)` + `@ImportAutoConfiguration(FlywayAutoConfiguration.class)`.
+- There is no `spring-boot-starter-jdbc-test` in 4.1.1; the outbox starter tests use `spring-boot-starter-test`.
+- `@WebMvcTest` pulls auto-configurations from `META-INF/spring/org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc.imports`;
+  the platform security and problem starters register themselves there so slice tests get real security and error handling.
+- Jackson 3 lives under `tools.jackson.*`, not `com.fasterxml.jackson.*`. Boot 4 exposes `StreamWriteFeature`s as
+  `spring.jackson.write.*`, e.g. `spring.jackson.write.write-bigdecimal-as-plain=true` (ADR-0016).
+- Platform starters added in PR-02: `com.marvel.hospitality:marvel-problem-spring-boot-starter:1.0.0` and
+  `com.marvel.hospitality:marvel-outbox-spring-boot-starter:1.0.0` (built from `platform/`, no external version).
 - `@WebMvcTest` lives in package `org.springframework.boot.webmvc.test.autoconfigure` (Boot 4) and does not
   auto-include a user-defined `SecurityFilterChain` configuration class; tests that need real security
   behaviour `@Import` it explicitly.

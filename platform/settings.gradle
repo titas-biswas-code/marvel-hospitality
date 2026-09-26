@@ -10,3 +10,9 @@ rootProject.name = 'marvel-platform'
 
 include 'security-starter'
 project(':security-starter').name = 'marvel-security-spring-boot-starter'
+
+include 'problem-starter'
+project(':problem-starter').name = 'marvel-problem-spring-boot-starter'
+
+include 'outbox-starter'
+project(':outbox-starter').name = 'marvel-outbox-spring-boot-starter'

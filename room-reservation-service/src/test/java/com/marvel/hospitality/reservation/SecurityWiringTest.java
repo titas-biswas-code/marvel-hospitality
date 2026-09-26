@@ -62,10 +62,10 @@ class SecurityWiringTest {
 
     @Test
     void referenceDataIsPublicInThisService() {
-        // marvel.security.additional-public-paths; the endpoint itself arrives in PR-02 (404 until then, never 401).
+        // marvel.security.additional-public-paths (PR-01) + the endpoint itself (PR-02): reachable without a token.
         HttpStatusCode status = RestClient.create("http://localhost:" + port).get().uri("/reference-data")
                 .exchange((request, response) -> response.getStatusCode());
 
-        assertThat(status).isNotEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(status).isEqualTo(HttpStatus.OK);
     }
 }

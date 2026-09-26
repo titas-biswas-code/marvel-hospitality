@@ -308,6 +308,190 @@
             }
           ],
           "response": []
+        },
+        {
+          "name": "Reservations",
+          "item": [
+            {
+              "name": "Create cash reservation",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"customerName\": \"Ada Lovelace\",\n  \"roomNumber\": \"101\",\n  \"startDate\": \"2027-03-10\",\n  \"endDate\": \"2027-03-12\",\n  \"roomSegment\": \"SMALL\",\n  \"paymentMode\": \"CASH\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{reservation_url}}/properties/AMS01/reservations",
+                  "host": ["{{reservation_url}}"],
+                  "path": ["properties", "AMS01", "reservations"]
+                },
+                "description": "Creates a CASH reservation for property AMS01, room 101 (SMALL); CASH is confirmed immediately. Saves reservationId to the environment for later requests."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 201\", function () {",
+                      "    pm.response.to.have.status(201);",
+                      "});",
+                      "",
+                      "const json = pm.response.json();",
+                      "",
+                      "pm.test(\"status is CONFIRMED\", function () {",
+                      "    pm.expect(json.status).to.eql(\"CONFIRMED\");",
+                      "});",
+                      "",
+                      "pm.test(\"Location header is present\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Location\")).to.include(\"/properties/AMS01/reservations/\");",
+                      "});",
+                      "",
+                      "pm.environment.set(\"reservationId\", json.reservationId);"
+                    ]
+                  }
+                }
+              ],
+              "response": []
+            },
+            {
+              "name": "Create bank-transfer reservation",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"customerName\": \"Ada Lovelace\",\n  \"roomNumber\": \"201\",\n  \"startDate\": \"2027-06-10\",\n  \"endDate\": \"2027-06-12\",\n  \"roomSegment\": \"MEDIUM\",\n  \"paymentMode\": \"BANK_TRANSFER\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{reservation_url}}/properties/AMS01/reservations",
+                  "host": ["{{reservation_url}}"],
+                  "path": ["properties", "AMS01", "reservations"]
+                },
+                "description": "Creates a BANK_TRANSFER reservation for property AMS01, room 201 (MEDIUM): PENDING_PAYMENT with a payment deadline and bank transfer instructions. Saves reservationId to the environment for later requests."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 201\", function () {",
+                      "    pm.response.to.have.status(201);",
+                      "});",
+                      "",
+                      "const json = pm.response.json();",
+                      "",
+                      "pm.test(\"status is PENDING_PAYMENT\", function () {",
+                      "    pm.expect(json.status).to.eql(\"PENDING_PAYMENT\");",
+                      "});",
+                      "",
+                      "pm.test(\"bankTransferInstructions is present\", function () {",
+                      "    pm.expect(json.bankTransferInstructions).to.be.a(\"string\").and.not.empty;",
+                      "});",
+                      "",
+                      "pm.environment.set(\"reservationId\", json.reservationId);"
+                    ]
+                  }
+                }
+              ],
+              "response": []
+            },
+            {
+              "name": "Get reservation",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{reservation_url}}/properties/AMS01/reservations/{{reservationId}}",
+                  "host": ["{{reservation_url}}"],
+                  "path": ["properties", "AMS01", "reservations", "{{reservationId}}"]
+                },
+                "description": "Fetches the reservation created by one of the \"Create ...\" requests above (reservationId from the environment)."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "const json = pm.response.json();",
+                      "",
+                      "pm.test(\"reservationId matches the request\", function () {",
+                      "    pm.expect(json.reservationId).to.eql(pm.environment.get(\"reservationId\"));",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "response": []
+            },
+            {
+              "name": "Reference data (public)",
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{reservation_url}}/reference-data",
+                  "host": ["{{reservation_url}}"],
+                  "path": ["reference-data"]
+                },
+                "description": "No authentication required (marvel.security.additional-public-paths). Lists every enum value this service uses, built from Enum.values()."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "const json = pm.response.json();",
+                      "",
+                      "pm.test(\"reservationStatuses is an array\", function () {",
+                      "    pm.expect(json.reservationStatuses).to.be.an(\"array\").that.is.not.empty;",
+                      "});",
+                      "",
+                      "pm.test(\"paymentModes is an array\", function () {",
+                      "    pm.expect(json.paymentModes).to.be.an(\"array\").that.is.not.empty;",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "response": []
+            }
+          ]
         }
       ]
     },

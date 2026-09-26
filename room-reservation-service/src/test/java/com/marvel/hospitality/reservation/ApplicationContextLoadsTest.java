@@ -35,4 +35,16 @@ class ApplicationContextLoadsTest {
                     .isEqualTo(HttpStatus.OK);
         }
     }
+
+    @Test
+    void openApiShowsReservationEndpointWithExamples() {
+        String apiDocs = RestClient.create("http://localhost:" + port).get().uri("/v3/api-docs")
+                .retrieve()
+                .body(String.class);
+
+        assertThat(apiDocs).contains("\"/properties/{propertyId}/reservations\"");
+        assertThat(apiDocs).contains("\"post\"");
+        assertThat(apiDocs).contains("P4145478");
+        assertThat(apiDocs).contains("\"/reference-data\"");
+    }
 }

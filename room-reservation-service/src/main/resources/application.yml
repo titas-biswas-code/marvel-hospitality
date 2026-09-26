@@ -18,6 +18,10 @@ spring:
       ddl-auto: validate
   flyway:
     enabled: true
+  jackson:
+    write:
+      # Amounts are scale-2 BigDecimals; never let them render as 2.4E+2 (ADR-0016).
+      write-bigdecimal-as-plain: true
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9094}
     admin:
@@ -34,6 +38,11 @@ spring:
           # `local` profile (inside compose) overrides only jwk-set-uri to the compose-internal Keycloak URL.
           issuer-uri: ${JWT_ISSUER_URI:http://localhost:8180/realms/marvel}
           jwk-set-uri: ${JWT_JWK_SET_URI:http://localhost:8180/realms/marvel/protocol/openid-connect/certs}
+
+reservation:
+  id:
+    # Reservation ids are 8 chars from a 32-symbol alphabet; a collision is rare but possible (contracts/identifiers.md).
+    max-attempts: 5
 
 marvel:
   security:
