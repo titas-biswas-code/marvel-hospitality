@@ -9,6 +9,12 @@ spring:
     virtual:
       enabled: true
 
+credit-card-stub:
+  # Deterministic delay for the "SLOW" paymentReference prefix (drives the reservation service's timeout test).
+  slow-delay: ${CREDIT_CARD_SLOW_DELAY:5s}
+  # Browser origins allowed to fetch /v3/api-docs cross-origin (the unified Swagger UI in infra/). Empty = no CORS.
+  cors-allowed-origins: ${CREDIT_CARD_CORS_ALLOWED_ORIGINS:}
+
 management:
   endpoints:
     web:
@@ -26,14 +32,25 @@ management:
       enabled: true
 
 springdoc:
+  # The generated OpenAPI resource is disabled (see api/OpenApiSpecController): this stub serves the
+  # hand-corrected YAML (docs/contracts/credit-card-payment-api.yaml) instead of springdoc's introspected
+  # one. `api-docs.enabled: false` looked like the obvious switch but it also disables SwaggerConfig's
+  # ConditionalOnBean(SpringDocConfiguration.class), which kills Swagger UI too. `enable-default-api-docs:
+  # false` disables only the generated OpenApiWebMvcResource bean at /v3/api-docs, leaving SpringDocConfiguration
+  # (and therefore Swagger UI) wired.
+  enable-default-api-docs: false
   swagger-ui:
     path: /swagger-ui.html
+    url: /v3/api-docs
 
 ---
 spring:
   config:
     activate:
       on-profile: local
+
+credit-card-stub:
+  cors-allowed-origins: ${CREDIT_CARD_CORS_ALLOWED_ORIGINS:http://localhost:8088}
 
 logging:
   structured:

@@ -8,7 +8,8 @@ status; confirm the room if `CONFIRMED`, otherwise throw an error. The provided 
 
 ## Decision
 - Keep the flow **synchronous** as the brief states. Sequence inside the `CreditCardPaymentModeHandler`:
-  1. validate request (no DB tx yet);
+  1. validate request: shape, stay and segment rules, payment reference not used yet, lock-free availability read
+     (no DB tx held);
   2. call `POST /payment-status` (read-only, idempotent);
   3. on `CONFIRMED`: open a short tx, insert `CONFIRMED` reservation (+ outbox), commit;
   4. on `REJECTED` or `404`: `422 PAYMENT_REJECTED`, nothing persisted;
@@ -27,8 +28,20 @@ status; confirm the room if `CONFIRMED`, otherwise throw an error. The provided 
 
 ## Consequences
 - The API contract for `CREDIT_CARD` is simple and honest: you get `201 CONFIRMED` or an error.
-- Room availability is checked after the payment check; a `409` after a confirmed payment is possible
-  and surfaces as such — acceptable since the status call does not charge anything.
+- Before the call, the stay/segment rules and a lock-free availability read run, so a request that is bound to
+  fail (bad dates, room already booked) never reaches the payment service. The exclusion constraint stays the
+  final word: a room taken between that read and the insert still yields `409 ROOM_UNAVAILABLE` after a confirmed
+  payment. The status call itself charges nothing, but the guest *has* paid (through the card flow that produced the
+  `paymentReference`) and has no reservation. The same holds for any other failure of the short transaction.
+  Such cases are logged at WARN with `paymentReference` and `propertyId` ("needs manual reconciliation"); the
+  provided card-payment spec has no void/refund operation, so automatic compensation is out of reach here. The
+  asynchronous saga (ADR-0006) is where this would be solved properly.
+- One confirmed card payment backs at most one reservation: the partial unique index
+  `reservation_credit_card_payment_reference_uq` on `payment_reference WHERE payment_mode = 'CREDIT_CARD'` (V2) is
+  mapped by name to `409 PAYMENT_REFERENCE_ALREADY_USED`, and the same predicate is read before the call so a reused
+  reference never reaches the payment service. Global rather than per property, because there is one card-payment
+  service for the whole corporation. A request that loses this race is not "paid but no reservation" (its payment
+  backs the winner), so it is not logged for reconciliation.
 - Generated client code is not committed (`build/generated`), which keeps the diff reviewable.
 
 ## Alternatives considered

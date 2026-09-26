@@ -12,9 +12,10 @@ import org.jspecify.annotations.Nullable;
 /**
  * The {@code POST /properties/{propertyId}/reservations} request body (rest-api.md). Only presence and size are
  * checked here; date relations (end after start, at most 30 nights, not in the past) are domain rules
- * ({@code InvalidStayException}) and are deliberately not duplicated as annotations. The "paymentReference required
- * for CREDIT_CARD" rule is PR-03 scope and is not enforced here either.
+ * ({@code InvalidStayException}) and are deliberately not duplicated as annotations. "paymentReference is required
+ * for CREDIT_CARD" is a request-shape rule, so it is checked here ({@link PaymentReferenceRequiredForCreditCard}).
  */
+@PaymentReferenceRequiredForCreditCard
 public record CreateReservationRequest(
         @NotBlank @Size(max = 200) String customerName,
         @NotBlank @Size(max = 10) String roomNumber,

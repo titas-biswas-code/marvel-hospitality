@@ -1,6 +1,5 @@
-# Build context for room-reservation-service, bank-transfer-payment-service and notification-service
-# is now the repo root (they need ../platform at build time) — see infra/docker-compose.yml.
-# credit-card-payment-service keeps its own context and its own .dockerignore.
+# Build context for every service is the repo root: they need ../platform and/or ../docs/contracts at build
+# time — see infra/docker-compose.yml.
 **/build
 **/.gradle
 **/bin
@@ -9,5 +8,7 @@
 **/.DS_Store
 .git
 infra/.env
-docs
+# Only the contracts are build inputs (the credit-card OpenAPI spec, PR-03); ADRs, plans and Postman are not.
+docs/*
+!docs/contracts
 **/node_modules

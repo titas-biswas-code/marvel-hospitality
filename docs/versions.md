@@ -11,7 +11,7 @@ Every later PR reuses these exact versions. Do not bump without a commit that on
 | io.spring.dependency-management plugin | 1.1.7 | 2026-09-26 | https://plugins.gradle.org/m2/io/spring/dependency-management/io.spring.dependency-management.gradle.plugin/maven-metadata.xml |
 | Spring Boot | 4.1.1 | 2026-09-26 | https://repo1.maven.org/maven2/org/springframework/boot/spring-boot-dependencies/maven-metadata.xml — 4.2.0-M* entries are milestones, excluded. |
 | springdoc-openapi | 3.1.1 (`springdoc-openapi-starter-webmvc-ui`) | 2026-09-26 | https://repo1.maven.org/maven2/org/springdoc/springdoc-openapi-starter-webmvc-ui/maven-metadata.xml — 3.x line targets Boot 4. |
-| Resilience4j | `io.github.resilience4j:resilience4j-spring-boot4` 2.4.0 | 2026-09-26 | https://repo1.maven.org/maven2/io/github/resilience4j/resilience4j-spring-boot4/maven-metadata.xml — Boot-4-specific starter exists; not used until PR-03. |
+| Resilience4j | `io.github.resilience4j:resilience4j-spring-boot4` 2.4.0 | 2026-09-26 | https://repo1.maven.org/maven2/io/github/resilience4j/resilience4j-spring-boot4/maven-metadata.xml — Boot-4-specific starter; used from PR-03 (room-reservation-service). |
 | spring-kafka | 4.1.1 | 2026-09-26 | From Boot 4.1.1 BOM: https://repo1.maven.org/maven2/org/springframework/boot/spring-boot-dependencies/4.1.1/spring-boot-dependencies-4.1.1.pom |
 | Testcontainers | 2.0.5 | 2026-09-26 | From Boot 4.1.1 BOM (same URL as spring-kafka). |
 | Flyway (Boot BOM) | 12.4.0 | 2026-09-26 | From Boot 4.1.1 BOM (same URL as spring-kafka). |
@@ -19,6 +19,7 @@ Every later PR reuses these exact versions. Do not bump without a commit that on
 | Jackson 3 (Boot BOM) | 3.1.5 (`tools.jackson`) | 2026-09-26 | From Boot 4.1.1 BOM (same URL as spring-kafka). |
 | WireMock | `org.wiremock:wiremock-jetty12` 3.13.1 | 2026-09-26 | https://repo1.maven.org/maven2/org/wiremock/wiremock-jetty12/maven-metadata.xml — not managed by the Boot BOM. |
 | wiremock-spring-boot | `org.wiremock.integrations:wiremock-spring-boot` 4.4.2 | 2026-09-26 | https://repo1.maven.org/maven2/org/wiremock/integrations/wiremock-spring-boot/maven-metadata.xml — Boot 4 support since 4.0.8; provides `@EnableWireMock`. |
+| openapi-generator Gradle plugin | `org.openapi.generator` 7.25.0 | 2026-09-26 | https://plugins.gradle.org/m2/org/openapi/generator/org.openapi.generator.gradle.plugin/maven-metadata.xml — PR-03; `java` generator, `restclient` library with `useSpringBoot4`, `useJackson3`, `useJspecify`. |
 | Spring Security (Boot BOM) | 7.1.1 | 2026-09-26 | From Boot 4.1.1 BOM (same URL as spring-kafka). |
 | swagger-ui image | swaggerapi/swagger-ui:v5.33.0 | 2026-09-26 | https://hub.docker.com/r/swaggerapi/swagger-ui/tags — unified dev Swagger UI (infra/README.md), not the per-service springdoc UI. |
 | Postgres image | postgres:17.11-alpine | 2026-09-26 | https://hub.docker.com/_/postgres — 17 chosen over 18.6 for Debezium maturity. |
@@ -54,6 +55,11 @@ Source: https://github.com/spring-projects/spring-boot/wiki/Spring-Boot-4.0-Migr
   the platform security and problem starters register themselves there so slice tests get real security and error handling.
 - Jackson 3 lives under `tools.jackson.*`, not `com.fasterxml.jackson.*`. Boot 4 exposes `StreamWriteFeature`s as
   `spring.jackson.write.*`, e.g. `spring.jackson.write.write-bigdecimal-as-plain=true` (ADR-0016).
+- `spring-boot-starter-restclient` (PR-03): Boot 4 split `RestClient.Builder` auto-configuration out of the web starter.
+- `spring-boot-starter-aspectj` (PR-03): Boot 4's name for the former `spring-boot-starter-aop`; Resilience4j's
+  `@Retry`/`@CircuitBreaker` annotations need it. `resilience4j-spring-boot4` itself does not pull it in.
+- `spring-boot-starter-webmvc-test` + `org.wiremock.integrations:wiremock-spring-boot` (`@EnableWireMock`, package
+  `org.wiremock.spring`) for the credit-card client tests (PR-03).
 - Platform starters added in PR-02: `com.marvel.hospitality:marvel-problem-spring-boot-starter:1.0.0` and
   `com.marvel.hospitality:marvel-outbox-spring-boot-starter:1.0.0` (built from `platform/`, no external version).
 - `@WebMvcTest` lives in package `org.springframework.boot.webmvc.test.autoconfigure` (Boot 4) and does not
@@ -65,7 +71,7 @@ Source: https://github.com/spring-projects/spring-boot/wiki/Spring-Boot-4.0-Migr
 - `platform/` (ADR-0001) is its own Gradle build on the same Spring Boot BOM (4.1.1) and springdoc version as the
   services. A version bump updates `platform/build.gradle` together with every service in the same commit.
   Platform starters are versioned `1.0.0`; services declare that version explicitly.
-- Resilience4j and WireMock are **not** managed by the Spring Boot 4.1.1 BOM; their versions above were resolved
+- openapi-generator, Resilience4j and WireMock are **not** managed by the Spring Boot 4.1.1 BOM; their versions above were resolved
   independently against Maven Central and must be pinned explicitly in each `build.gradle`.
 - Gotcha: in Boot 4, a `RestClient.Builder` bean is only auto-configured when the `spring-boot-starter-restclient`
   starter is on the classpath. Tests that need a `RestClient` without that starter use `RestClient.create(...)`

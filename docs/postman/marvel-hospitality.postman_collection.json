@@ -358,7 +358,7 @@
                       "    pm.expect(pm.response.headers.get(\"Location\")).to.include(\"/properties/AMS01/reservations/\");",
                       "});",
                       "",
-                      "pm.environment.set(\"reservationId\", json.reservationId);"
+                      "if (pm.response.code === 201) { pm.environment.set(\"reservationId\", json.reservationId); }"
                     ]
                   }
                 }
@@ -411,7 +411,166 @@
                       "    pm.expect(json.bankTransferInstructions).to.be.a(\"string\").and.not.empty;",
                       "});",
                       "",
-                      "pm.environment.set(\"reservationId\", json.reservationId);"
+                      "if (pm.response.code === 201) { pm.environment.set(\"reservationId\", json.reservationId); }"
+                    ]
+                  }
+                }
+              ],
+              "response": []
+            },
+            {
+              "name": "Create credit-card reservation (OK-123 → 201 CONFIRMED)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"customerName\": \"Ada Lovelace\",\n  \"roomNumber\": \"202\",\n  \"startDate\": \"2027-09-10\",\n  \"endDate\": \"2027-09-12\",\n  \"roomSegment\": \"MEDIUM\",\n  \"paymentMode\": \"CREDIT_CARD\",\n  \"paymentReference\": \"OK-123\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{reservation_url}}/properties/AMS01/reservations",
+                  "host": [
+                    "{{reservation_url}}"
+                  ],
+                  "path": [
+                    "properties",
+                    "AMS01",
+                    "reservations"
+                  ]
+                },
+                "description": "Creates a CREDIT_CARD reservation for AMS01 room 202 (MEDIUM). The reservation service first asks credit-card-payment-service for the status of paymentReference OK-123 (stub: prefix OK → CONFIRMED), then stores it CONFIRMED. Saves reservationId. Re-running it gives 409 PAYMENT_REFERENCE_ALREADY_USED (one card payment backs one reservation), without calling the payment service; change paymentReference (e.g. OK-124) and the dates to book again."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 201\", function () {",
+                      "    pm.response.to.have.status(201);",
+                      "});",
+                      "",
+                      "const json = pm.response.json();",
+                      "",
+                      "pm.test(\"status is CONFIRMED\", function () {",
+                      "    pm.expect(json.status).to.eql(\"CONFIRMED\");",
+                      "    pm.expect(json.paymentReference).to.eql(\"OK-123\");",
+                      "});",
+                      "",
+                      "if (pm.response.code === 201) { pm.environment.set(\"reservationId\", json.reservationId); }"
+                    ]
+                  }
+                }
+              ],
+              "response": []
+            },
+            {
+              "name": "Create credit-card reservation (REJ-1 → 422 PAYMENT_REJECTED)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"customerName\": \"Ada Lovelace\",\n  \"roomNumber\": \"202\",\n  \"startDate\": \"2027-10-10\",\n  \"endDate\": \"2027-10-12\",\n  \"roomSegment\": \"MEDIUM\",\n  \"paymentMode\": \"CREDIT_CARD\",\n  \"paymentReference\": \"REJ-1\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{reservation_url}}/properties/AMS01/reservations",
+                  "host": [
+                    "{{reservation_url}}"
+                  ],
+                  "path": [
+                    "properties",
+                    "AMS01",
+                    "reservations"
+                  ]
+                },
+                "description": "Stub prefix REJ → REJECTED, so the reservation service answers 422 PAYMENT_REJECTED and stores nothing (repeatable)."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 422\", function () {",
+                      "    pm.response.to.have.status(422);",
+                      "});",
+                      "",
+                      "pm.test(\"code is PAYMENT_REJECTED\", function () {",
+                      "    pm.expect(pm.response.json().code).to.eql(\"PAYMENT_REJECTED\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "response": []
+            },
+            {
+              "name": "Create credit-card reservation (payment service unavailable → 503)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"customerName\": \"Ada Lovelace\",\n  \"roomNumber\": \"202\",\n  \"startDate\": \"2027-10-10\",\n  \"endDate\": \"2027-10-12\",\n  \"roomSegment\": \"MEDIUM\",\n  \"paymentMode\": \"CREDIT_CARD\",\n  \"paymentReference\": \"SLOW-1\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{reservation_url}}/properties/AMS01/reservations",
+                  "host": [
+                    "{{reservation_url}}"
+                  ],
+                  "path": [
+                    "properties",
+                    "AMS01",
+                    "reservations"
+                  ]
+                },
+                "description": "Always 503 PAYMENT_SERVICE_UNAVAILABLE with Retry-After: 5, and never books anything. With the stub running, the SLOW prefix makes it answer after 5 s, past our 2 s read timeout: three attempts, about 6.5 s. With the stub stopped (`docker compose -f infra/docker-compose.yml stop credit-card-payment-service`), the connection fails and the answer comes in about 2-3 s. Repeat it a few times and the circuit breaker opens: the answer is then immediate, without any call. Start the stub again afterwards."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 503\", function () {",
+                      "    pm.response.to.have.status(503);",
+                      "});",
+                      "",
+                      "pm.test(\"code is PAYMENT_SERVICE_UNAVAILABLE with Retry-After\", function () {",
+                      "    pm.expect(pm.response.json().code).to.eql(\"PAYMENT_SERVICE_UNAVAILABLE\");",
+                      "    pm.expect(pm.response.headers.get(\"Retry-After\")).to.eql(\"5\");",
+                      "});"
                     ]
                   }
                 }
@@ -570,6 +729,68 @@
                   "",
                   "pm.test(\"properties is an array\", function () {",
                   "    pm.expect(json.properties).to.be.an(\"array\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "credit-card-payment-service",
+      "description": "The stub implementing docs/contracts/credit-card-payment-api.yaml. No auth (the spec declares none, ADR-0011). Behaviour by reference prefix: OK → CONFIRMED, REJ → REJECTED, SLOW → 5 s then CONFIRMED, ERR → 500, anything else → 404.",
+      "auth": {
+        "type": "noauth"
+      },
+      "item": [
+        {
+          "name": "Payment status (OK-123)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paymentReference\": \"OK-123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{credit_card_url}}/credit-card-payment-api/payment-status",
+              "host": [
+                "{{credit_card_url}}"
+              ],
+              "path": [
+                "credit-card-payment-api",
+                "payment-status"
+              ]
+            },
+            "description": "Calls the stub directly. Change the reference prefix to see the other outcomes."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"status is CONFIRMED\", function () {",
+                  "    pm.expect(pm.response.json().status).to.eql(\"CONFIRMED\");",
                   "});"
                 ]
               }

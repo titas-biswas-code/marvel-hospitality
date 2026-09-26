@@ -26,6 +26,14 @@ bank-transfer reservation" first — either saves `reservationId` to the environ
 different rooms so they can be re-run without colliding with each other, but re-running the *same* one twice
 without changing its dates hits `409 ROOM_UNAVAILABLE` on the second run.
 
+The three **credit-card** requests (PR-03) need `make up-apps` (it includes `credit-card-payment-service`). The
+stub decides by `paymentReference` prefix: `OK-123` → `201 CONFIRMED` (saves `reservationId`; a second run is
+`409 PAYMENT_REFERENCE_ALREADY_USED`, because one card payment backs one reservation), `REJ-1` → `422 PAYMENT_REJECTED` (nothing stored, repeatable). "payment service unavailable → 503" is always a 503 and
+never books: with the stub up its `SLOW-1` reference outlasts the read timeout (~6.5 s over three attempts); stop
+the stub (command in its description) to see the connection-failure path instead. The **credit-card-payment-service** folder calls the stub
+directly, without a token (the spec declares no security, ADR-0011); it uses the `credit_card_url` environment
+variable.
+
 ## Newman (CLI)
 
 ```

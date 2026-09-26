@@ -36,6 +36,14 @@ tasks.named('test') {
     useJUnitPlatform()
 }
 
+// Serves the corrected spec verbatim at build time (api/OpenApiSpecController reads it from the classpath);
+// never commit a copy of docs/contracts/credit-card-payment-api.yaml into this service.
+processResources {
+    from('../docs/contracts/credit-card-payment-api.yaml') {
+        into 'static'
+    }
+}
+
 // Only the executable jar is needed (Dockerfile copies build/libs/*.jar).
 tasks.named('jar') {
     enabled = false

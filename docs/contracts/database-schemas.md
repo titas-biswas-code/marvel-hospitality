@@ -61,6 +61,10 @@ CREATE TABLE reservation (
 );
 CREATE INDEX reservation_deadline_idx ON reservation (payment_deadline_at)
   WHERE status = 'PENDING_PAYMENT' AND payment_mode = 'BANK_TRANSFER';
+-- V2 (PR-03): one confirmed card payment backs at most one reservation, across all properties (one card-payment
+-- service for the corporation). Violation -> 409 PAYMENT_REFERENCE_ALREADY_USED, mapped by index name.
+CREATE UNIQUE INDEX reservation_credit_card_payment_reference_uq ON reservation (payment_reference)
+  WHERE payment_mode = 'CREDIT_CARD';
 
 CREATE TABLE received_payment (             -- every bank payment we have seen, matched or not
   payment_id              varchar(36)  PRIMARY KEY,   -- from the event

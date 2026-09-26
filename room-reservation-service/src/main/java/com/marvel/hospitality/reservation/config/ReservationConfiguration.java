@@ -1,12 +1,16 @@
 package com.marvel.hospitality.reservation.config;
 
 import com.marvel.hospitality.reservation.application.CreateReservationUseCase;
+import com.marvel.hospitality.reservation.application.CreditCardPaymentClient;
+import com.marvel.hospitality.reservation.application.CreditCardPaymentVerification;
 import com.marvel.hospitality.reservation.application.GetReservationUseCase;
 import com.marvel.hospitality.reservation.application.OutboxWriter;
+import com.marvel.hospitality.reservation.application.PaymentVerification;
 import com.marvel.hospitality.reservation.application.PropertyCatalog;
 import com.marvel.hospitality.reservation.application.ReservationRepository;
 import com.marvel.hospitality.reservation.domain.BankTransferPaymentModeHandler;
 import com.marvel.hospitality.reservation.domain.CashPaymentModeHandler;
+import com.marvel.hospitality.reservation.domain.CreditCardPaymentModeHandler;
 import com.marvel.hospitality.reservation.domain.PaymentDeadlinePolicy;
 import com.marvel.hospitality.reservation.domain.PaymentMode;
 import com.marvel.hospitality.reservation.domain.PaymentModeHandler;
@@ -15,6 +19,7 @@ import java.time.Clock;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -22,7 +27,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Wires the Spring-free domain and application classes. Payment modes plug in as {@link PaymentModeHandler} beans
- * collected into a map (ADR-0004): adding a mode is one class plus one bean, with no switch to edit.
+ * collected into a map (ADR-0004): adding a mode is one class plus one bean, with no switch to edit. A mode that must
+ * check its payment remotely before storing (credit card, ADR-0011) adds a {@link PaymentVerification} bean too.
  */
 @Configuration(proxyBeanMethods = false)
 class ReservationConfiguration {
@@ -43,16 +49,28 @@ class ReservationConfiguration {
     }
 
     @Bean
+    CreditCardPaymentModeHandler creditCardPaymentModeHandler() {
+        return new CreditCardPaymentModeHandler();
+    }
+
+    @Bean
+    CreditCardPaymentVerification creditCardPaymentVerification(CreditCardPaymentClient client) {
+        return new CreditCardPaymentVerification(client);
+    }
+
+    @Bean
     ReservationIdGenerator reservationIdGenerator() {
         return new ReservationIdGenerator();
     }
 
     @Bean
     CreateReservationUseCase createReservationUseCase(PropertyCatalog catalog, ReservationRepository reservations,
-            OutboxWriter outbox, List<PaymentModeHandler> handlers, ReservationIdGenerator idGenerator,
-            TransactionTemplate transactions, Clock clock, @Value("${reservation.id.max-attempts}") int maxIdAttempts) {
-        return new CreateReservationUseCase(catalog, reservations, outbox, byMode(handlers), idGenerator, transactions,
-                clock, maxIdAttempts);
+            OutboxWriter outbox, List<PaymentModeHandler> handlers, List<PaymentVerification> verifications,
+            ReservationIdGenerator idGenerator, TransactionTemplate transactions, Clock clock,
+            @Value("${reservation.id.max-attempts}") int maxIdAttempts) {
+        return new CreateReservationUseCase(catalog, reservations, outbox,
+                byMode(handlers, PaymentModeHandler::mode), byMode(verifications, PaymentVerification::mode),
+                idGenerator, transactions, clock, maxIdAttempts);
     }
 
     @Bean
@@ -60,12 +78,13 @@ class ReservationConfiguration {
         return new GetReservationUseCase(catalog, reservations);
     }
 
-    private static Map<PaymentMode, PaymentModeHandler> byMode(List<PaymentModeHandler> handlers) {
-        Map<PaymentMode, PaymentModeHandler> byMode = new EnumMap<>(PaymentMode.class);
-        for (PaymentModeHandler handler : handlers) {
-            PaymentModeHandler previous = byMode.put(handler.mode(), handler);
+    private static <T> Map<PaymentMode, T> byMode(List<T> strategies, Function<T, PaymentMode> modeOf) {
+        Map<PaymentMode, T> byMode = new EnumMap<>(PaymentMode.class);
+        for (T strategy : strategies) {
+            T previous = byMode.put(modeOf.apply(strategy), strategy);
             if (previous != null) {
-                throw new IllegalStateException("Two handlers for payment mode " + handler.mode());
+                throw new IllegalStateException(
+                        "Two " + strategy.getClass().getSimpleName() + "s for payment mode " + modeOf.apply(strategy));
             }
         }
         return byMode;

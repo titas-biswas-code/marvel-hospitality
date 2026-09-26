@@ -14,10 +14,12 @@ import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.marvel.hospitality.reservation.domain.BankTransferPaymentModeHandler;
 import com.marvel.hospitality.reservation.domain.CashPaymentModeHandler;
+import com.marvel.hospitality.reservation.domain.CreditCardPaymentModeHandler;
 import com.marvel.hospitality.reservation.domain.InvalidStayException;
 import com.marvel.hospitality.reservation.domain.Money;
 import com.marvel.hospitality.reservation.domain.PaymentDeadlinePolicy;
 import com.marvel.hospitality.reservation.domain.PaymentMode;
+import com.marvel.hospitality.reservation.domain.PaymentModeHandler;
 import com.marvel.hospitality.reservation.domain.Property;
 import com.marvel.hospitality.reservation.domain.Reservation;
 import com.marvel.hospitality.reservation.domain.ReservationIdGenerator;
@@ -25,6 +27,7 @@ import com.marvel.hospitality.reservation.domain.ReservationStatus;
 import com.marvel.hospitality.reservation.domain.ReservationStatusChanged;
 import com.marvel.hospitality.reservation.domain.Room;
 import com.marvel.hospitality.reservation.domain.RoomSegment;
+import com.marvel.hospitality.reservation.domain.StayPeriod;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -33,9 +36,13 @@ import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.SimpleTransactionStatus;
+import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionOperations;
 
 class CreateReservationUseCaseTest {
@@ -49,24 +56,31 @@ class CreateReservationUseCaseTest {
     private final PropertyCatalog catalog = mock(PropertyCatalog.class);
     private final ReservationRepository reservations = mock(ReservationRepository.class);
     private final OutboxWriter outbox = mock(OutboxWriter.class);
+    private final CreditCardPaymentClient creditCardClient = mock(CreditCardPaymentClient.class);
+    private final RecordingTransactions transactions = new RecordingTransactions();
 
     private CreateReservationUseCase useCase;
 
     @BeforeEach
     void setUp() {
-        useCase = new CreateReservationUseCase(catalog, reservations, outbox,
-                Map.of(PaymentMode.CASH, new CashPaymentModeHandler(),
-                        PaymentMode.BANK_TRANSFER, new BankTransferPaymentModeHandler(new PaymentDeadlinePolicy())),
-                new ReservationIdGenerator(new Random(42)), TransactionOperations.withoutTransaction(), CLOCK,
-                MAX_ID_ATTEMPTS);
+        useCase = new CreateReservationUseCase(catalog, reservations, outbox, allHandlers(),
+                Map.of(PaymentMode.CREDIT_CARD, new CreditCardPaymentVerification(creditCardClient)),
+                new ReservationIdGenerator(new Random(42)), transactions, CLOCK, MAX_ID_ATTEMPTS);
         given(catalog.findProperty("AMS01")).willReturn(Optional.of(AMS01));
         given(catalog.findRoom("AMS01", "201")).willReturn(Optional.of(ROOM_201));
         given(catalog.findNightlyRate("AMS01", RoomSegment.MEDIUM)).willReturn(Optional.of(Money.eur("120.00")));
     }
 
+    private static Map<PaymentMode, PaymentModeHandler> allHandlers() {
+        return Map.of(PaymentMode.CASH, new CashPaymentModeHandler(),
+                PaymentMode.BANK_TRANSFER, new BankTransferPaymentModeHandler(new PaymentDeadlinePolicy()),
+                PaymentMode.CREDIT_CARD, new CreditCardPaymentModeHandler());
+    }
+
     private static CreateReservationCommand command(PaymentMode mode) {
         return new CreateReservationCommand("AMS01", "Ada Lovelace", "201", LocalDate.parse("2026-10-10"),
-                LocalDate.parse("2026-10-12"), RoomSegment.MEDIUM, mode, null);
+                LocalDate.parse("2026-10-12"), RoomSegment.MEDIUM, mode,
+                mode == PaymentMode.CREDIT_CARD ? "OK-123" : null);
     }
 
     @Test
@@ -138,11 +152,138 @@ class CreateReservationUseCaseTest {
     }
 
     @Test
-    void creditCardHasNoHandlerInThisRelease() {
+    void failsFastWhenAPaymentModeHasNoHandler() {
+        assertThatThrownBy(() -> new CreateReservationUseCase(catalog, reservations, outbox,
+                Map.of(PaymentMode.CASH, new CashPaymentModeHandler()), Map.of(),
+                new ReservationIdGenerator(new Random(42)), transactions, CLOCK, MAX_ID_ATTEMPTS))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("BANK_TRANSFER")
+                .hasMessageContaining("CREDIT_CARD");
+    }
+
+    @Test
+    void confirmsCreditCardReservationWhenPaymentConfirmed() {
+        given(creditCardClient.retrieveStatus("OK-123")).willReturn(CreditCardPaymentStatus.CONFIRMED);
+
+        ReservationView view = useCase.create(command(PaymentMode.CREDIT_CARD));
+
+        assertThat(view.reservation().status()).isEqualTo(ReservationStatus.CONFIRMED);
+        assertThat(view.reservation().paymentReference()).isEqualTo("OK-123");
+        verify(reservations).add(view.reservation());
+        verify(outbox).append(any());
+    }
+
+    @Test
+    void verifiesCreditCardPaymentOutsideAnyTransactionAndBeforeStoring() {
+        AtomicBoolean inTransactionDuringCall = new AtomicBoolean(true);
+        given(creditCardClient.retrieveStatus("OK-123")).willAnswer(invocation -> {
+            inTransactionDuringCall.set(transactions.active);
+            verify(reservations, never()).add(any());
+            return CreditCardPaymentStatus.CONFIRMED;
+        });
+
+        useCase.create(command(PaymentMode.CREDIT_CARD));
+
+        assertThat(inTransactionDuringCall).isFalse();
+        verify(reservations).add(any());
+    }
+
+    @Test
+    void persistsNothingWhenCreditCardPaymentRejected() {
+        given(creditCardClient.retrieveStatus("OK-123")).willReturn(CreditCardPaymentStatus.REJECTED);
+
         assertThatThrownBy(() -> useCase.create(command(PaymentMode.CREDIT_CARD)))
-                .isInstanceOf(PaymentModeNotSupportedException.class);
+                .isInstanceOf(PaymentRejectedException.class)
+                .extracting(ex -> ((PaymentRejectedException) ex).status())
+                .isEqualTo(CreditCardPaymentStatus.REJECTED);
         verify(reservations, never()).add(any());
         verifyNoInteractions(outbox);
+    }
+
+    @Test
+    void persistsNothingWhenCreditCardPaymentNotFound() {
+        given(creditCardClient.retrieveStatus("OK-123")).willReturn(CreditCardPaymentStatus.NOT_FOUND);
+
+        assertThatThrownBy(() -> useCase.create(command(PaymentMode.CREDIT_CARD)))
+                .isInstanceOf(PaymentRejectedException.class);
+        verify(reservations, never()).add(any());
+        verifyNoInteractions(outbox);
+    }
+
+    @Test
+    void persistsNothingWhenPaymentServiceUnavailable() {
+        given(creditCardClient.retrieveStatus("OK-123"))
+                .willThrow(new PaymentServiceUnavailableException("down", new RuntimeException("timeout")));
+
+        assertThatThrownBy(() -> useCase.create(command(PaymentMode.CREDIT_CARD)))
+                .isInstanceOf(PaymentServiceUnavailableException.class);
+        verify(reservations, never()).add(any());
+        verifyNoInteractions(outbox);
+    }
+
+    @Test
+    void doesNotCallPaymentServiceWhenStayIsInvalid() {
+        CreateReservationCommand pastStay = new CreateReservationCommand("AMS01", "Ada Lovelace", "201",
+                LocalDate.parse("2026-09-01"), LocalDate.parse("2026-09-03"), RoomSegment.MEDIUM,
+                PaymentMode.CREDIT_CARD, "OK-123");
+
+        assertThatThrownBy(() -> useCase.create(pastStay)).isInstanceOf(InvalidStayException.class);
+        verifyNoInteractions(creditCardClient, reservations, outbox);
+    }
+
+    @Test
+    void doesNotCallPaymentServiceWhenPaymentReferenceAlreadyUsed() {
+        given(reservations.isPaymentReferenceUsed(PaymentMode.CREDIT_CARD, "OK-123")).willReturn(true);
+
+        assertThatThrownBy(() -> useCase.create(command(PaymentMode.CREDIT_CARD)))
+                .isInstanceOf(PaymentReferenceAlreadyUsedException.class);
+        verifyNoInteractions(creditCardClient, outbox);
+        verify(reservations, never()).add(any());
+    }
+
+    @Test
+    void reportsPaymentReferenceTakenByAConcurrentRequestAsAlreadyUsed() {
+        given(creditCardClient.retrieveStatus("OK-123")).willReturn(CreditCardPaymentStatus.CONFIRMED);
+        willThrow(new PaymentReferenceAlreadyUsedException(PaymentMode.CREDIT_CARD, "OK-123", new RuntimeException("23505")))
+                .given(reservations).add(any());
+
+        assertThatThrownBy(() -> useCase.create(command(PaymentMode.CREDIT_CARD)))
+                .isInstanceOf(PaymentReferenceAlreadyUsedException.class);
+        verify(reservations, times(1)).add(any());
+        verifyNoInteractions(outbox);
+    }
+
+    @Test
+    void doesNotCallPaymentServiceWhenRoomIsAlreadyBooked() {
+        given(reservations.isBooked("AMS01", "201",
+                new StayPeriod(LocalDate.parse("2026-10-10"), LocalDate.parse("2026-10-12")))).willReturn(true);
+
+        assertThatThrownBy(() -> useCase.create(command(PaymentMode.CREDIT_CARD)))
+                .isInstanceOf(RoomUnavailableException.class);
+        verifyNoInteractions(creditCardClient, outbox);
+        verify(reservations, never()).add(any());
+    }
+
+    @Test
+    void reportsRoomTakenAfterPaymentConfirmedAsRoomUnavailable() {
+        given(creditCardClient.retrieveStatus("OK-123")).willReturn(CreditCardPaymentStatus.CONFIRMED);
+        willThrow(new RoomUnavailableException("AMS01", "201", new RuntimeException("23P01")))
+                .given(reservations).add(any());
+
+        assertThatThrownBy(() -> useCase.create(command(PaymentMode.CREDIT_CARD)))
+                .isInstanceOf(RoomUnavailableException.class);
+        verify(creditCardClient).retrieveStatus("OK-123");
+        verifyNoInteractions(outbox);
+    }
+
+    @Test
+    void cashAndBankTransferNeverCallThePaymentService() {
+        useCase.create(command(PaymentMode.CASH));
+        useCase.create(command(PaymentMode.BANK_TRANSFER));
+
+        verifyNoInteractions(creditCardClient);
+        verify(reservations, never()).isBooked(any(), any(), any());
+        verify(reservations, never()).isPaymentReferenceUsed(any(), any());
     }
 
     @Test
@@ -154,5 +295,22 @@ class CreateReservationUseCaseTest {
         assertThatThrownBy(() -> useCase.create(tooLong))
                 .isInstanceOf(InvalidStayException.class);
         verifyNoInteractions(reservations, outbox);
+    }
+
+    /** Runs callbacks directly, like {@link TransactionOperations#withoutTransaction()}, but records when one is open. */
+    private static final class RecordingTransactions implements TransactionOperations {
+
+        boolean active;
+
+        @Override
+        public <T> T execute(TransactionCallback<T> action) {
+            active = true;
+            try {
+                TransactionStatus status = new SimpleTransactionStatus();
+                return action.doInTransaction(status);
+            } finally {
+                active = false;
+            }
+        }
     }
 }

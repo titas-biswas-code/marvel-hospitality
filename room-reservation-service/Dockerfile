@@ -1,9 +1,11 @@
 # syntax=docker/dockerfile:1
-# Build context: repo root (needs ../platform) — see infra/docker-compose.yml.
+# Build context: repo root (needs ../platform, and ../docs/contracts for the generated credit-card client) — see
+# infra/docker-compose.yml.
 
 # ---- build: compile with the Gradle wrapper on a JDK 25 image ----
 FROM gradle:9.8.0-jdk25-noble AS build
 COPY platform /workspace/platform
+COPY docs/contracts /workspace/docs/contracts
 WORKDIR /workspace/room-reservation-service
 COPY room-reservation-service/gradlew room-reservation-service/settings.gradle room-reservation-service/build.gradle ./
 COPY room-reservation-service/gradle gradle

@@ -29,6 +29,17 @@ final class ReservationApiExamples {
               "paymentReference": null
             }""";
 
+    static final String CREATE_CREDIT_CARD_REQUEST = """
+            {
+              "customerName": "Ada Lovelace",
+              "roomNumber": "101",
+              "startDate": "2026-10-10",
+              "endDate": "2026-10-12",
+              "roomSegment": "MEDIUM",
+              "paymentMode": "CREDIT_CARD",
+              "paymentReference": "OK-123"
+            }""";
+
     static final String BANK_TRANSFER_RESPONSE = """
             {
               "reservationId": "P4145478",
@@ -64,6 +75,28 @@ final class ReservationApiExamples {
               "nights": 2,
               "paymentMode": "CASH",
               "paymentReference": null,
+              "totalAmount": 240.00,
+              "amountReceived": 0.00,
+              "currency": "EUR",
+              "paymentDeadlineAt": null,
+              "bankTransferInstructions": null,
+              "createdAt": "2026-09-26T10:00:00Z",
+              "updatedAt": "2026-09-26T10:00:00Z"
+            }""";
+
+    static final String CREDIT_CARD_RESPONSE = """
+            {
+              "reservationId": "P4145478",
+              "propertyId": "AMS01",
+              "status": "CONFIRMED",
+              "customerName": "Ada Lovelace",
+              "roomNumber": "101",
+              "roomSegment": "MEDIUM",
+              "startDate": "2026-10-10",
+              "endDate": "2026-10-12",
+              "nights": 2,
+              "paymentMode": "CREDIT_CARD",
+              "paymentReference": "OK-123",
               "totalAmount": 240.00,
               "amountReceived": 0.00,
               "currency": "EUR",
@@ -124,6 +157,16 @@ final class ReservationApiExamples {
               "code": "ROOM_UNAVAILABLE"
             }""";
 
+    static final String PAYMENT_REFERENCE_ALREADY_USED_EXAMPLE = """
+            {
+              "type": "https://marvel-hospitality/problems/PAYMENT_REFERENCE_ALREADY_USED",
+              "title": "Conflict",
+              "status": 409,
+              "detail": "CREDIT_CARD payment OK-123 is already used by another reservation.",
+              "instance": "/properties/AMS01/reservations",
+              "code": "PAYMENT_REFERENCE_ALREADY_USED"
+            }""";
+
     static final String ROOM_SEGMENT_MISMATCH_EXAMPLE = """
             {
               "type": "https://marvel-hospitality/problems/ROOM_SEGMENT_MISMATCH",
@@ -144,14 +187,24 @@ final class ReservationApiExamples {
               "code": "BANK_TRANSFER_LEAD_TIME_TOO_SHORT"
             }""";
 
-    static final String NOT_IMPLEMENTED_YET_EXAMPLE = """
+    static final String PAYMENT_REJECTED_EXAMPLE = """
             {
-              "type": "https://marvel-hospitality/problems/NOT_IMPLEMENTED_YET",
-              "title": "Not Implemented",
-              "status": 501,
-              "detail": "Payment mode CREDIT_CARD is not supported yet.",
+              "type": "https://marvel-hospitality/problems/PAYMENT_REJECTED",
+              "title": "Unprocessable Content",
+              "status": 422,
+              "detail": "Payment REJ-1 is REJECTED.",
               "instance": "/properties/AMS01/reservations",
-              "code": "NOT_IMPLEMENTED_YET"
+              "code": "PAYMENT_REJECTED"
+            }""";
+
+    static final String PAYMENT_SERVICE_UNAVAILABLE_EXAMPLE = """
+            {
+              "type": "https://marvel-hospitality/problems/PAYMENT_SERVICE_UNAVAILABLE",
+              "title": "Service Unavailable",
+              "status": 503,
+              "detail": "The credit-card payment service is unavailable: no usable answer after retries.",
+              "instance": "/properties/AMS01/reservations",
+              "code": "PAYMENT_SERVICE_UNAVAILABLE"
             }""";
 
     static final String FORBIDDEN_EXAMPLE = """
