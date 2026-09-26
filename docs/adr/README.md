@@ -20,3 +20,4 @@ unless stated. ADRs are numbered in the order the decisions were taken; later AD
 | 0013 | Observability |
 | 0014 | bank-transfer-payment-service scope and the bank simulator |
 | 0015 | Testing strategy |
+| 0016 | Money as a small domain value object; JavaMoney (JSR 354 / Moneta) deferred |

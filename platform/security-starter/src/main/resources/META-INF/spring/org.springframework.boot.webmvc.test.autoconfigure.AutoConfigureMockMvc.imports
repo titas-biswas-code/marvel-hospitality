@@ -1,0 +1,2 @@
+com.marvel.hospitality.platform.security.MarvelSecurityAutoConfiguration
+com.marvel.hospitality.platform.security.OpenApiSecurityAutoConfiguration

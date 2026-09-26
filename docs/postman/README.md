@@ -19,6 +19,13 @@ then select the "marvel-hospitality (local)" environment (top right).
 `whoami` in each service folder needs any valid token; `whoami without token → 401` in
 `room-reservation-service` deliberately overrides auth to `noauth` to prove the endpoint is protected.
 
+`room-reservation-service`'s **Reservations** folder (PR-02) needs a token with `reservation:write`/
+`reservation:read` for property `AMS01` (alice or bob). Run "Create cash reservation" or "Create
+bank-transfer reservation" first — either saves `reservationId` to the environment — then "Get reservation".
+"Reference data (public)" needs no token at all. The two create requests use fixed far-future dates on
+different rooms so they can be re-run without colliding with each other, but re-running the *same* one twice
+without changing its dates hits `409 ROOM_UNAVAILABLE` on the second run.
+
 ## Newman (CLI)
 
 ```

@@ -1,0 +1,24 @@
+description = 'RFC 9457 ProblemDetail conventions: Problems, a fallback @RestControllerAdvice, and constraint-name ' +
+        'lookup for DB violations (docs/contracts/rest-api.md)'
+
+dependencies {
+    // What every consuming service needs: MVC plus this starter's fallback advice. spring-tx for
+    // DataIntegrityViolationException, which every service maps constraints against, not just DB-backed ones.
+    api 'org.springframework.boot:spring-boot-starter-webmvc'
+    api 'org.springframework:spring-tx'
+
+    // Optional integrations, guarded at runtime by class presence (ConstraintNames, FallbackProblemAdvice's
+    // AccessDeniedException/AuthenticationException rethrow) so a service without a database or without security
+    // still gets the fallback advice.
+    compileOnly 'org.postgresql:postgresql'
+    compileOnly 'org.hibernate.orm:hibernate-core'
+    compileOnly 'org.springframework.security:spring-security-core'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-security'
+    testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-validation'
+    testImplementation 'org.postgresql:postgresql'
+    testImplementation 'org.hibernate.orm:hibernate-core'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
