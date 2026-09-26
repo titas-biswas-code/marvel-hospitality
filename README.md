@@ -20,9 +20,13 @@ http://localhost:8088), or the Postman collection in `docs/postman/` (Auth folde
 
 ## Spec defects found
 
-The provided `credit-card-payment-service` OpenAPI spec could not be used as-is. The corrected copy is
-`docs/contracts/credit-card-payment-api.yaml`; both the stub and the generated client in
-`room-reservation-service` are built from it (ADR-0011). What was wrong in the original:
+The provided `credit-card-payment-service` OpenAPI spec has defects. Generating a client from it as provided does
+work, but the payment status comes out as a plain `String` with no allowed values, `lastUpdateDate` as a `String`
+rather than a timestamp, and the server URL is unusable. The corrected copy is
+`docs/contracts/credit-card-payment-api.yaml`; both the stub and the generated client in `room-reservation-service`
+are built from it (ADR-0011). The spec exactly as provided is kept beside it in
+`docs/contracts/credit-card-payment-api.original.yaml`, so every change can be checked with a diff. None of the
+corrections changes a request or response on the wire. What was wrong in the original:
 
 1. `servers.url` was `http//:localhost:9090//host/credit-card-payment-api` — malformed scheme, a double slash and
    a stray `host` segment. Corrected to `http://localhost:9090/credit-card-payment-api`.
@@ -32,6 +36,10 @@ The provided `credit-card-payment-service` OpenAPI spec could not be used as-is.
 4. `lastUpdateDate` used `format: datetime`; the OpenAPI format is `date-time`, so it was not parsed as a timestamp.
 5. No security scheme is declared. Kept as-is (assumed network-internal); a real deployment would use a
    service-account token (ADR-0011, ADR-0012).
+
+One addition that is not a defect fix: an `operationId` (`retrievePaymentStatus`), which only names the generated
+client method. Nothing else was tightened; in particular `status` is still not declared `required`, because the
+provider does not promise it. The client treats a `200` without a status as a contract violation.
 
 Design decisions: `docs/adr/`. API and event contracts: `docs/contracts/`.
 

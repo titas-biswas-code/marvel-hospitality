@@ -1,28 +1,13 @@
-# CORRECTED copy of the provided credit-card-payment-service spec. The spec as provided is kept unchanged next to it,
-# in credit-card-payment-api.original.yaml, so every difference below can be checked with a plain diff. Nothing here
-# changes a request or response on the wire: the path, the JSON field names and the status codes are the provider's.
-# Defects found in the original (documented in README and ADR-0011):
-#   1. servers.url was "http//:localhost:9090//host/credit-card-payment-api" (malformed scheme, double slash, stray "host").
-#   2. PaymentStatusResponse.status used "format: enum" with a nested list; must be "enum: [...]".
-#   3. PaymentStatusResponse.status description said "Expiry date of the driving license" (copy-paste leftover).
-#   4. lastUpdateDate used format "datetime"; the OpenAPI format is "date-time".
-#   5. No security scheme declared; kept as-is (assumed network-internal), see ADR-0011.
-# Consumer-side addition, not a defect fix:
-#   6. operationId "retrievePaymentStatus" on POST /payment-status. It only names the generated client method (the
-#      generator would otherwise call it paymentStatusPost); no effect on the wire.
-# Deliberately NOT added: `required: [status]` on PaymentStatusResponse. The provider does not promise it, so the
-# client treats a 200 without a status as a contract violation instead of the spec pretending it cannot happen.
 openapi: 3.0.3
 info:
   title: Credit card payment api
   description: API to retrieve status of the credit card payment
   version: 1.0.0
 servers:
-  - url: http://localhost:9090/credit-card-payment-api
+  - url: http//:localhost:9090//host/credit-card-payment-api
 paths:
   /payment-status:
     post:
-      operationId: retrievePaymentStatus
       summary: retrieve payment status
       description: Accepts payment reference and provides the status of the payment
       requestBody:
@@ -67,7 +52,7 @@ components:
       properties:
         paymentReference:
           type: string
-          description: reference of the payment
+          description: reference of the payment 
           example: DL123456789
       required:
         - paymentReference
@@ -77,15 +62,16 @@ components:
         lastUpdateDate:
           type: string
           description: last updated at
-          format: date-time
+          format: datetime
           example: 2017-07-21T17:32:28Z
         status:
           type: string
-          enum:
+          format: enum
             - CONFIRMED
             - REJECTED
           example: CONFIRMED
-          description: Status of the credit card payment
+          description: Expiry date of the driving license
+          
     ErrorResponse:
       type: object
       properties:
