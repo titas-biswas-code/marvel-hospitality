@@ -110,7 +110,25 @@ Role `bank:ingest` (service account `bank-simulator`). Idempotent on `bankTransa
 - `currency != EUR` → `422 UNSUPPORTED_CURRENCY`. `amount <= 0` → `400 VALIDATION_FAILED`.
 
 ### GET /bank-transactions/{paymentId}   role `bank:read`
+```json
+{
+  "paymentId": "5c0c1e4e-3d2a-4b6f-9c1e-0a1b2c3d4e5f",
+  "bankTransactionRef": "BANK-TX-000123",
+  "debtorAccountNumber": "NL91ABNA0417164300",
+  "debtorName": "A. Lovelace",
+  "amount": 120.00,
+  "currency": "EUR",
+  "remittanceInformation": "1401541457 P4145478",
+  "bookedAt": "2026-10-01T09:15:00Z",
+  "receivedAt": "2026-10-01T09:15:02Z"
+}
+```
+- Unknown `paymentId` → `404 BANK_TRANSACTION_NOT_FOUND`; `paymentId` not a UUID → `400 VALIDATION_FAILED`.
+
 ### GET /refunds/{refundId}               role `bank:read`  → `{ refundId, paymentId, amount, reason, status, createdAt, executedAt }`
+
+Error codes: `VALIDATION_FAILED` 400, `UNAUTHENTICATED` 401, `FORBIDDEN` 403, `BANK_TRANSACTION_NOT_FOUND` 404,
+`UNSUPPORTED_CURRENCY` 422, `INTERNAL_ERROR` 500.
 
 ## credit-card-payment-service (port 9090, base path `/credit-card-payment-api`)
 Implements `credit-card-payment-api.yaml` exactly. Deterministic stub behaviour keyed on `paymentReference`:

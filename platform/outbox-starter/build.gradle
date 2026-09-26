@@ -1,3 +1,8 @@
+plugins {
+    // Test fixtures (src/testFixtures): the shared Testcontainers + Debezium CDC harness services use in their tests.
+    id 'java-test-fixtures'
+}
+
 description = 'Transactional outbox writer: OutboxEventWriter joins the caller\'s own transaction via JdbcClient ' +
         '(ADR-0006, docs/contracts/outbox-and-inbox.md)'
 
@@ -8,11 +13,16 @@ dependencies {
 
     annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
 
+    // Consumed by services as testImplementation testFixtures('com.marvel.hospitality:marvel-outbox-spring-boot-starter:1.0.0').
+    testFixturesApi 'org.testcontainers:testcontainers-postgresql'
+    testFixturesApi 'org.testcontainers:testcontainers-kafka'
+    testFixturesApi 'org.apache.kafka:kafka-clients'
+    testFixturesImplementation 'org.springframework.boot:spring-boot-starter-jackson'
+
     // No Boot 4 "-jdbc-test" starter exists (verified against the Gradle cache); spring-boot-starter-test is the
     // only source of JUnit 5 + AssertJ + Mockito for a plain JDBC starter.
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.boot:spring-boot-testcontainers'
-    testImplementation 'org.testcontainers:testcontainers-postgresql'
     testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
     testRuntimeOnly 'org.postgresql:postgresql'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'

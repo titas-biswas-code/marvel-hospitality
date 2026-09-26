@@ -57,6 +57,8 @@ dependencies {
     testImplementation 'org.testcontainers:testcontainers-postgresql'
     testImplementation 'org.testcontainers:testcontainers-kafka'
     testImplementation "org.wiremock.integrations:wiremock-spring-boot:${wiremockSpringBootVersion}"
+    // Shared Postgres/Kafka/Connect containers and the Debezium CDC harness (platform/outbox-starter test fixtures).
+    testImplementation testFixtures("com.marvel.hospitality:marvel-outbox-spring-boot-starter:${marvelPlatformVersion}")
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
@@ -93,7 +95,13 @@ tasks.named('compileJava') {
 }
 
 tasks.named('test') {
-    useJUnitPlatform()
+    useJUnitPlatform {
+        // CDC tests (@Tag("cdc"), Kafka + Debezium Connect containers) are part of every build; `-PskipCdc` leaves
+        // them out for a quicker local loop.
+        if (project.hasProperty('skipCdc')) {
+            excludeTags 'cdc'
+        }
+    }
 }
 
 // Only the executable jar is needed (Dockerfile copies build/libs/*.jar).

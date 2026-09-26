@@ -6,12 +6,15 @@ import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration;
 import org.springframework.boot.jdbc.autoconfigure.JdbcClientAutoConfiguration;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -45,5 +48,23 @@ public class MarvelOutboxAutoConfiguration {
                     "No outbox producer name: set marvel.outbox.producer or spring.application.name.");
         }
         return producer;
+    }
+
+    /**
+     * The daily purge. Switching it off ({@code marvel.outbox.purge.enabled=false}) also leaves scheduling alone:
+     * {@code @EnableScheduling} sits on this class, not on the auto-configuration, so the starter only turns
+     * scheduling on for a service that actually wants the purge. Service jobs of their own (e.g. auto-cancel) gate
+     * their own beans; they must not rely on scheduling being off.
+     */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnProperty(prefix = "marvel.outbox.purge", name = "enabled", havingValue = "true", matchIfMissing = true)
+    @EnableScheduling
+    static class OutboxPurgeConfiguration {
+
+        @Bean
+        @ConditionalOnMissingBean
+        OutboxPurgeJob outboxPurgeJob(JdbcClient jdbcClient, ObjectProvider<Clock> clock, MarvelOutboxProperties properties) {
+            return new OutboxPurgeJob(jdbcClient, clock.getIfAvailable(Clock::systemUTC), properties.purge().retention());
+        }
     }
 }

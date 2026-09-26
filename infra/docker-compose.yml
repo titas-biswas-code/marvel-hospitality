@@ -116,6 +116,11 @@ services:
       CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
       CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
       CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
+      # Connector JSON (infra/debezium) reads DB passwords as ${env:<DB>_DB_PASSWORD}, so no secret lives in it.
+      CONNECT_CONFIG_PROVIDERS: env
+      CONNECT_CONFIG_PROVIDERS_ENV_CLASS: org.apache.kafka.common.config.provider.EnvVarConfigProvider
+      RESERVATION_DB_PASSWORD: ${RESERVATION_DB_PASSWORD}
+      PAYMENT_DB_PASSWORD: ${PAYMENT_DB_PASSWORD}
     ports:
       - "8083:8083"
     healthcheck:
@@ -124,6 +129,29 @@ services:
       timeout: 5s
       retries: 30
       start_period: 20s
+
+  # One-shot: registers infra/debezium/*.json with Connect (idempotent PUT) and waits until they are RUNNING.
+  # Profile `apps` and after both outbox services are healthy, because the connectors need the outbox_event table,
+  # which each service's Flyway migration creates (a filtered publication cannot be created for a missing table).
+  # Rows written before registration are still published: the connector's initial snapshot reads them (ADR-0007).
+  connect-init:
+    image: quay.io/debezium/connect:3.6.3.Final
+    profiles: [apps]
+    depends_on:
+      connect:
+        condition: service_healthy
+      room-reservation-service:
+        condition: service_healthy
+      bank-transfer-payment-service:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "/scripts/register-connectors.sh"]
+    environment:
+      CONNECT_URL: http://connect:8083
+      CONNECTORS_DIR: /connectors
+    volumes:
+      - ./connect-init/register-connectors.sh:/scripts/register-connectors.sh:ro
+      - ./debezium:/connectors:ro
+    restart: "no"
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.7.4

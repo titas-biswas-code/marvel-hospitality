@@ -12,11 +12,8 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * The outbox-writing behaviour every service gets from this starter, tested once here through a minimal Boot app
@@ -25,12 +22,8 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 @SpringBootTest(classes = TestApplication.class, properties = {
         "spring.application.name=outbox-test-app",
         "spring.sql.init.mode=always"})
-@Testcontainers
+@Import(SharedPostgresConfiguration.class)
 class OutboxEventWriterTest {
-
-    @Container
-    @ServiceConnection
-    static final PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:17.11-alpine");
 
     @Autowired
     OutboxEventWriter writer;

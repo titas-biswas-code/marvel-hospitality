@@ -21,6 +21,8 @@ class ArchitectureRulesTest {
             Pattern.compile("^import (static )?(org\\.springframework|jakarta\\.persistence|org\\.hibernate)\\.", Pattern.MULTILINE);
     private static final Pattern CLOCKLESS_NOW =
             Pattern.compile("\\b(Instant|LocalDate|LocalDateTime|LocalTime|OffsetDateTime|ZonedDateTime)\\.now\\(\\s*\\)");
+    private static final Pattern KAFKA_TEMPLATE_IMPORT =
+            Pattern.compile("^import (static )?.*\\bKafkaTemplate\\b", Pattern.MULTILINE);
 
     @Test
     void domainHasNoSpringImports() throws IOException {
@@ -30,6 +32,13 @@ class ArchitectureRulesTest {
     @Test
     void noDirectNowCallsOutsideClock() throws IOException {
         assertThat(filesMatching(MAIN_SOURCES, CLOCKLESS_NOW)).isEmpty();
+    }
+
+    @Test
+    void noKafkaTemplateInApplicationCode() throws IOException {
+        // ADR-0006: the application never calls KafkaTemplate for a domain event; the outbox is the only path to
+        // Kafka. (KafkaTemplate is allowed only inside platform's DLT error-handling wiring, never here.)
+        assertThat(filesMatching(MAIN_SOURCES, KAFKA_TEMPLATE_IMPORT)).isEmpty();
     }
 
     private static List<Path> filesMatching(Path root, Pattern pattern) throws IOException {

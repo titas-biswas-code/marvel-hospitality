@@ -693,6 +693,302 @@
             }
           ],
           "response": []
+        },
+        {
+          "name": "Bank transactions",
+          "item": [
+            {
+              "name": "Post bank transaction (new → 202)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"bankTransactionRef\": \"{{bank_tx_ref}}\",\n  \"debtorAccountNumber\": \"NL91ABNA0417164300\",\n  \"debtorName\": \"A. Lovelace\",\n  \"amount\": 120.00,\n  \"currency\": \"EUR\",\n  \"remittanceInformation\": \"1401541457 P4145478\",\n  \"bookedAt\": \"2026-10-01T09:15:00Z\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{payment_url}}/bank-transactions",
+                  "host": [
+                    "{{payment_url}}"
+                  ],
+                  "path": [
+                    "bank-transactions"
+                  ]
+                },
+                "description": "Posts a new bank transaction (role bank:ingest, service account bank-simulator). Run 'Get token (bank-simulator, client credentials)' first. A pre-request script generates a fresh bankTransactionRef and stores it as bank_tx_ref; paymentId from the response is stored as bank_payment_id for the following requests."
+              },
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.environment.set(\"bank_tx_ref\", \"BANK-TX-\" + Date.now());"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 202\", function () {",
+                      "    pm.response.to.have.status(202);",
+                      "});",
+                      "",
+                      "const json = pm.response.json();",
+                      "",
+                      "pm.test(\"status is PUBLISHED\", function () {",
+                      "    pm.expect(json.status).to.eql(\"PUBLISHED\");",
+                      "});",
+                      "",
+                      "pm.test(\"bankTransactionRef matches the request\", function () {",
+                      "    pm.expect(json.bankTransactionRef).to.eql(pm.environment.get(\"bank_tx_ref\"));",
+                      "});",
+                      "",
+                      "pm.test(\"Response has paymentId\", function () {",
+                      "    pm.expect(json.paymentId).to.be.a(\"string\").and.not.empty;",
+                      "});",
+                      "",
+                      "pm.environment.set(\"bank_payment_id\", json.paymentId);"
+                    ]
+                  }
+                }
+              ],
+              "response": []
+            },
+            {
+              "name": "Post same bankTransactionRef again (→ 200, same paymentId)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"bankTransactionRef\": \"{{bank_tx_ref}}\",\n  \"debtorAccountNumber\": \"NL91ABNA0417164300\",\n  \"debtorName\": \"A. Lovelace\",\n  \"amount\": 120.00,\n  \"currency\": \"EUR\",\n  \"remittanceInformation\": \"1401541457 P4145478\",\n  \"bookedAt\": \"2026-10-01T09:15:00Z\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{payment_url}}/bank-transactions",
+                  "host": [
+                    "{{payment_url}}"
+                  ],
+                  "path": [
+                    "bank-transactions"
+                  ]
+                },
+                "description": "Run 'Post bank transaction (new → 202)' first so bank_tx_ref and bank_payment_id are set. Reposts the identical bankTransactionRef: idempotent on bankTransactionRef, so expects 200 with the same paymentId and no new outbox/Kafka event."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "const json = pm.response.json();",
+                      "",
+                      "pm.test(\"paymentId matches the first post\", function () {",
+                      "    pm.expect(json.paymentId).to.eql(pm.environment.get(\"bank_payment_id\"));",
+                      "});",
+                      "",
+                      "pm.test(\"bankTransactionRef matches the first post\", function () {",
+                      "    pm.expect(json.bankTransactionRef).to.eql(pm.environment.get(\"bank_tx_ref\"));",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "response": []
+            },
+            {
+              "name": "Post non-EUR (→ 422 UNSUPPORTED_CURRENCY)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"bankTransactionRef\": \"{{bank_tx_ref_noneur}}\",\n  \"debtorAccountNumber\": \"NL91ABNA0417164300\",\n  \"debtorName\": \"A. Lovelace\",\n  \"amount\": 50.00,\n  \"currency\": \"USD\",\n  \"remittanceInformation\": \"1401541457 P4145478\",\n  \"bookedAt\": \"2026-10-01T09:15:00Z\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{payment_url}}/bank-transactions",
+                  "host": [
+                    "{{payment_url}}"
+                  ],
+                  "path": [
+                    "bank-transactions"
+                  ]
+                },
+                "description": "A currency other than EUR is rejected regardless of bankTransactionRef novelty. A pre-request script generates a fresh bankTransactionRef (bank_tx_ref_noneur) so this never collides with the idempotency requests above. Expects 422 ProblemDetail, code UNSUPPORTED_CURRENCY."
+              },
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.environment.set(\"bank_tx_ref_noneur\", \"BANK-TX-NONEUR-\" + Date.now());"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 422\", function () {",
+                      "    pm.response.to.have.status(422);",
+                      "});",
+                      "",
+                      "pm.test(\"Content-Type is application/problem+json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+                      "});",
+                      "",
+                      "const json = pm.response.json();",
+                      "",
+                      "pm.test(\"code is UNSUPPORTED_CURRENCY\", function () {",
+                      "    pm.expect(json.code).to.eql(\"UNSUPPORTED_CURRENCY\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "response": []
+            },
+            {
+              "name": "Post zero amount (→ 400 VALIDATION_FAILED)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"bankTransactionRef\": \"{{bank_tx_ref_zero}}\",\n  \"debtorAccountNumber\": \"NL91ABNA0417164300\",\n  \"debtorName\": \"A. Lovelace\",\n  \"amount\": 0.00,\n  \"currency\": \"EUR\",\n  \"remittanceInformation\": \"1401541457 P4145478\",\n  \"bookedAt\": \"2026-10-01T09:15:00Z\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{payment_url}}/bank-transactions",
+                  "host": [
+                    "{{payment_url}}"
+                  ],
+                  "path": [
+                    "bank-transactions"
+                  ]
+                },
+                "description": "amount <= 0 is rejected before idempotency/currency checks. A pre-request script generates a fresh bankTransactionRef (bank_tx_ref_zero). Expects 400 ProblemDetail, code VALIDATION_FAILED."
+              },
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.environment.set(\"bank_tx_ref_zero\", \"BANK-TX-ZERO-\" + Date.now());"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 400\", function () {",
+                      "    pm.response.to.have.status(400);",
+                      "});",
+                      "",
+                      "pm.test(\"Content-Type is application/problem+json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+                      "});",
+                      "",
+                      "const json = pm.response.json();",
+                      "",
+                      "pm.test(\"code is VALIDATION_FAILED\", function () {",
+                      "    pm.expect(json.code).to.eql(\"VALIDATION_FAILED\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "response": []
+            },
+            {
+              "name": "Get bank transaction by paymentId",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{payment_url}}/bank-transactions/{{bank_payment_id}}",
+                  "host": [
+                    "{{payment_url}}"
+                  ],
+                  "path": [
+                    "bank-transactions",
+                    "{{bank_payment_id}}"
+                  ]
+                },
+                "description": "Needs a token with bank:read; no dev user/client has it yet (an open item, see docs/contracts/security.md). Running this with the bank-simulator token (role bank:ingest only, from 'Get token (bank-simulator, client credentials)') is expected to return 403 FORBIDDEN, not the transaction. Once a bank:read-capable credential exists in the realm, get a token with it and rerun this request; the expected response is then 200 with paymentId, bankTransactionRef, debtorAccountNumber, debtorName, amount, currency, remittanceInformation, bookedAt, receivedAt."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 403 (no credential in this realm has bank:read yet)\", function () {",
+                      "    pm.response.to.have.status(403);",
+                      "});",
+                      "",
+                      "const json = pm.response.json();",
+                      "",
+                      "pm.test(\"code is FORBIDDEN\", function () {",
+                      "    pm.expect(json.code).to.eql(\"FORBIDDEN\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "response": []
+            }
+          ]
         }
       ]
     },
