@@ -39,8 +39,13 @@ $(ENV_FILE):
 up: $(ENV_FILE)
 	$(COMPOSE) up -d --wait
 
+# connect-init is a one-shot job: it registers the Debezium connectors and exits. `up --wait` reports any container
+# that exits as a failure (even with exit code 0) unless another service waits for it, and none does. So `up` starts
+# every other app service and waits for them to be healthy, then connect-init runs in the foreground; its exit code
+# is the real signal (non-zero when a connector does not reach RUNNING).
 up-apps: $(ENV_FILE)
-	$(COMPOSE) --profile apps up -d --wait --build
+	$(COMPOSE) --profile apps up -d --wait --build $$($(COMPOSE) --profile apps config --services | grep -vx connect-init)
+	$(COMPOSE) --profile apps run --rm connect-init
 
 down: $(ENV_FILE)
 	$(COMPOSE) --profile apps down
