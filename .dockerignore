@@ -1,0 +1,13 @@
+# Build context for room-reservation-service, bank-transfer-payment-service and notification-service
+# is now the repo root (they need ../platform at build time) — see infra/docker-compose.yml.
+# credit-card-payment-service keeps its own context and its own .dockerignore.
+**/build
+**/.gradle
+**/bin
+**/.idea
+**/*.iml
+**/.DS_Store
+.git
+infra/.env
+docs
+**/node_modules

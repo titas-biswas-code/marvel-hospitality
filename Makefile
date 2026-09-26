@@ -1,4 +1,5 @@
 # Convenience targets. Each service still builds on its own (cd <service> && ./gradlew build) — ADR-0001.
+PLATFORM := platform
 SERVICES := room-reservation-service bank-transfer-payment-service credit-card-payment-service notification-service
 ENV_FILE := infra/.env
 COMPOSE  := docker compose -f infra/docker-compose.yml --env-file $(ENV_FILE)
@@ -15,9 +16,11 @@ help:
 	@echo "build-all | test-all | up | up-apps | down | logs | reset | token USER=alice | client-token CLIENT=bank-simulator"
 
 build-all:
+	@echo "==> $(PLATFORM)"; (cd $(PLATFORM) && ./gradlew build --console=plain)
 	@set -e; for s in $(SERVICES); do echo "==> $$s"; (cd $$s && ./gradlew build --console=plain); done
 
 test-all:
+	@echo "==> $(PLATFORM)"; (cd $(PLATFORM) && ./gradlew test --console=plain)
 	@set -e; for s in $(SERVICES); do echo "==> $$s"; (cd $$s && ./gradlew test --console=plain); done
 
 $(ENV_FILE):

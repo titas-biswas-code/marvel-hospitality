@@ -19,6 +19,8 @@ Every later PR reuses these exact versions. Do not bump without a commit that on
 | Jackson 3 (Boot BOM) | 3.1.5 (`tools.jackson`) | 2026-09-26 | From Boot 4.1.1 BOM (same URL as spring-kafka). |
 | WireMock | `org.wiremock:wiremock-jetty12` 3.13.1 | 2026-09-26 | https://repo1.maven.org/maven2/org/wiremock/wiremock-jetty12/maven-metadata.xml — not managed by the Boot BOM. |
 | wiremock-spring-boot | `org.wiremock.integrations:wiremock-spring-boot` 4.4.2 | 2026-09-26 | https://repo1.maven.org/maven2/org/wiremock/integrations/wiremock-spring-boot/maven-metadata.xml — Boot 4 support since 4.0.8; provides `@EnableWireMock`. |
+| Spring Security (Boot BOM) | 7.1.1 | 2026-09-26 | From Boot 4.1.1 BOM (same URL as spring-kafka). |
+| swagger-ui image | swaggerapi/swagger-ui:v5.33.0 | 2026-09-26 | https://hub.docker.com/r/swaggerapi/swagger-ui/tags — unified dev Swagger UI (infra/README.md), not the per-service springdoc UI. |
 | Postgres image | postgres:17.11-alpine | 2026-09-26 | https://hub.docker.com/_/postgres — 17 chosen over 18.6 for Debezium maturity. |
 | Kafka image | apache/kafka:4.3.1 | 2026-09-26 | https://hub.docker.com/r/apache/kafka/tags — KRaft mode. |
 | kafka-ui image | kafbat/kafka-ui:v1.5.0 | 2026-09-26 | https://hub.docker.com/r/kafbat/kafka-ui/tags — provectuslabs/kafka-ui is unmaintained. |
@@ -41,11 +43,18 @@ Source: https://github.com/spring-projects/spring-boot/wiki/Spring-Boot-4.0-Migr
 - Testcontainers 2.x modules: `org.testcontainers:testcontainers-postgresql` and `org.testcontainers:testcontainers-kafka`, with classes
   `org.testcontainers.postgresql.PostgreSQLContainer` and `org.testcontainers.kafka.KafkaContainer` (package renamed off `org.testcontainers.containers`).
   `@ServiceConnection` is still `org.springframework.boot.testcontainers.service.connection.ServiceConnection`.
-- `spring-boot-starter-security-oauth2-resource-server` — planned for PR-01, not used in this PR.
+- `spring-boot-starter-security-oauth2-resource-server` — used from PR-01, together with the test starters
+  `spring-boot-starter-security-oauth2-resource-server-test` and `spring-boot-starter-security-test`.
 - Jackson 3 lives under `tools.jackson.*`, not `com.fasterxml.jackson.*`.
+- `@WebMvcTest` lives in package `org.springframework.boot.webmvc.test.autoconfigure` (Boot 4) and does not
+  auto-include a user-defined `SecurityFilterChain` configuration class; tests that need real security
+  behaviour `@Import` it explicitly.
 
 ## Notes
 
+- `platform/` (ADR-0001) is its own Gradle build on the same Spring Boot BOM (4.1.1) and springdoc version as the
+  services. A version bump updates `platform/build.gradle` together with every service in the same commit.
+  Platform starters are versioned `1.0.0`; services declare that version explicitly.
 - Resilience4j and WireMock are **not** managed by the Spring Boot 4.1.1 BOM; their versions above were resolved
   independently against Maven Central and must be pinned explicitly in each `build.gradle`.
 - Gotcha: in Boot 4, a `RestClient.Builder` bean is only auto-configured when the `spring-boot-starter-restclient`

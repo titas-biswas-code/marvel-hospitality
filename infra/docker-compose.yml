@@ -169,7 +169,113 @@ services:
       retries: 30
       start_period: 20s
 
-  # Application services join here under `profiles: [apps]` from PR-01 onwards.
+  # Application services (profile `apps`, from PR-01). Each container's `local` Spring profile
+  # (set via SPRING_PROFILES_ACTIVE=local in its Dockerfile) already defaults DB host, Kafka bootstrap
+  # servers, JWT issuer/JWKS URIs and the CORS-allowed origin for this compose network — see each
+  # service's application.yml. Only the DB password (a secret) is overridden here.
+  room-reservation-service:
+    # Context is the repo root, not this service's dir: the build needs ../platform (platform/security-starter).
+    build: { context: .., dockerfile: room-reservation-service/Dockerfile }
+    image: marvel-hospitality/room-reservation-service:local
+    profiles: [apps]
+    environment:
+      DB_PASSWORD: ${RESERVATION_DB_PASSWORD}
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    healthcheck:
+      # No curl/wget in eclipse-temurin:25-jre-noble: raw HTTP over bash /dev/tcp (same technique as keycloak
+      # above). Ubuntu's default /bin/sh is dash, which lacks /dev/tcp, so bash is invoked explicitly.
+      test: ["CMD-SHELL", "bash -c \"exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /actuator/health/readiness HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q 'HTTP/1.1 200' <&3\""]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 40s
+
+  bank-transfer-payment-service:
+    build: { context: .., dockerfile: bank-transfer-payment-service/Dockerfile }
+    image: marvel-hospitality/bank-transfer-payment-service:local
+    profiles: [apps]
+    environment:
+      DB_PASSWORD: ${PAYMENT_DB_PASSWORD}
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c \"exec 3<>/dev/tcp/127.0.0.1/8081 && printf 'GET /actuator/health/readiness HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q 'HTTP/1.1 200' <&3\""]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 40s
+
+  notification-service:
+    build: { context: .., dockerfile: notification-service/Dockerfile }
+    image: marvel-hospitality/notification-service:local
+    profiles: [apps]
+    environment:
+      DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD}
+    ports:
+      - "8082:8082"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c \"exec 3<>/dev/tcp/127.0.0.1/8082 && printf 'GET /actuator/health/readiness HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q 'HTTP/1.1 200' <&3\""]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 40s
+
+  # Dev convenience only: one Swagger UI with a per-service dropdown, so nobody has to remember three
+  # separate /swagger-ui.html URLs. Each service still serves its own Swagger UI too. The browser fetches
+  # each service's OpenAPI spec cross-origin from :8088, which is why the services' `local` profile allows
+  # CORS from http://localhost:8088 (marvel.security.cors-allowed-origins).
+  swagger-ui:
+    image: swaggerapi/swagger-ui:v5.33.0
+    profiles: [apps]
+    environment:
+      URLS: >-
+        [
+          {"url": "http://localhost:8080/v3/api-docs", "name": "room-reservation-service"},
+          {"url": "http://localhost:8081/v3/api-docs", "name": "bank-transfer-payment-service"},
+          {"url": "http://localhost:8082/v3/api-docs", "name": "notification-service"}
+        ]
+      URLS_PRIMARY_NAME: room-reservation-service
+      PERSIST_AUTHORIZATION: "true"
+    ports:
+      - "8088:8080"
+    depends_on:
+      room-reservation-service:
+        condition: service_healthy
+      bank-transfer-payment-service:
+        condition: service_healthy
+      notification-service:
+        condition: service_healthy
+    healthcheck:
+      # swaggerapi/swagger-ui has wget (checked: `docker run --rm --entrypoint sh swaggerapi/swagger-ui:v5.33.0
+      # -c 'command -v wget curl'` -> /usr/bin/wget only); it serves its own static UI on :8080 internally.
+      # 127.0.0.1, not localhost: nginx listens on IPv4 only (PORT_IPV6 unset) and localhost resolves to ::1.
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 15s
 
 volumes:
   postgres-data:

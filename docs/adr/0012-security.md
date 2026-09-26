@@ -30,7 +30,9 @@ users are scoped to the properties they may operate.
   real token validation.
 
 ## Consequences
-- Each service has ~3 small security classes (config, authority converter, property-access bean) — duplicated per ADR-0001.
+- The mechanism (filter chain, authority converter, property-access bean, 401/403 problem details, `/whoami`)
+  lives once in `platform/security-starter` (ADR-0001); a service adds the dependency and, if needed,
+  `marvel.security.additional-public-paths`. Endpoints keep their own `@PreAuthorize` rules.
 - Adding a gateway later changes nothing inside services.
 
 ## Alternatives considered

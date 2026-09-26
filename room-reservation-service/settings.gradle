@@ -4,3 +4,6 @@ plugins {
 }
 
 rootProject.name = 'room-reservation-service'
+
+// Shared platform libraries, built from source (ADR-0001): `com.marvel.hospitality:<artifact>` resolves to ../platform.
+includeBuild('../platform')
