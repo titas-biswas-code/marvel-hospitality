@@ -15,7 +15,8 @@ Local environment (Postgres, Kafka, Debezium, Keycloak, Grafana): see `infra/REA
 | Credit card: `CREDIT_CARD` reservations checked synchronously against `credit-card-payment-service` (a stub of the provided spec) through a client generated from the corrected spec, with timeouts, retry and circuit breaker (ADR-0011) | done |
 | Bank payments: `bank-transfer-payment-service` ledger with idempotent `POST /bank-transactions`; its outbox and the reservation outbox published to Kafka by Debezium (ADR-0007, ADR-0014); bank simulator scripts | done |
 | Payment matching: the reservation service consumes the bank topic idempotently; partial payments add up, the full amount confirms, every payment is stored with its outcome (ADR-0009). Technical failures are retried, then dead-lettered to `<topic>.DLT` (ADR-0008); watch `kafka.dlt.messages` and replay with `make replay-dlt TOPIC=…` (needs `python3`). Payments that name no known reservation are **not** refunded automatically: they wait in `GET /unmatched-payments` so a typo can still be reconciled by a person | done |
-| Auto-cancel, refunds, notifications, observability | next |
+| Auto-cancel: bank-transfer reservations still `PENDING_PAYMENT` at their deadline — local midnight two days before arrival in the property's timezone — are cancelled by a job that is safe with any number of instances (per-row `FOR UPDATE SKIP LOCKED`) and after restarts (the deadline is data); a status event carries reason `PAYMENT_DEADLINE_MISSED`; a payment arriving afterwards is kept as `UNMATCHED_NOT_PENDING` (ADR-0010) | done |
+| Refunds, notifications, observability | next |
 
 ## Run it
 
@@ -37,6 +38,51 @@ The first run takes a few minutes (image builds). Then:
 make down        # stop everything, keep the data
 make clean       # remove containers, volumes (all data) and the built images; the next `make up-apps` starts from scratch
 ```
+
+## Auto-cancel
+
+ADR-0010. A scheduled job cancels `BANK_TRANSFER` reservations still `PENDING_PAYMENT` once their payment
+deadline — local midnight two days before the stay's start date, in the property's own timezone — has passed.
+Safe with any number of running instances (each row is claimed individually with `FOR UPDATE SKIP LOCKED`) and
+safe across restarts (the deadline is a persisted column, not an in-memory timer, so nothing is lost by being
+down across it).
+
+| Setting | Env var | Default |
+|---|---|---|
+| `reservation.auto-cancel.enabled` | `RESERVATION_AUTO_CANCEL_ENABLED` | `true` |
+| `reservation.auto-cancel.interval` | `RESERVATION_AUTO_CANCEL_INTERVAL` | `PT60S` |
+| `reservation.auto-cancel.initial-delay` | — | `PT30S` |
+| `reservation.auto-cancel.batch-size` | — | `100` |
+
+Metrics: `reservation.autocancel.cancelled` (counter, tagged `propertyId`) and `reservation.autocancel.overdue`
+(gauge — rows still due after the last run; above zero means something is failing or held elsewhere).
+
+### See it happen
+
+```
+# 1. poll every 5 s instead of 60 s (or set RESERVATION_AUTO_CANCEL_INTERVAL in infra/.env)
+RESERVATION_AUTO_CANCEL_INTERVAL=PT5S docker compose -f infra/docker-compose.yml --env-file infra/.env \
+  --profile apps up -d --wait room-reservation-service
+
+# 2. book a BANK_TRANSFER reservation (still PENDING_PAYMENT, deadline two days before arrival)
+TOKEN=$(make -s token)
+ID=$(curl -s -X POST http://localhost:8080/properties/AMS01/reservations \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"customerName":"Ada Lovelace","roomNumber":"101","startDate":"2026-12-10","endDate":"2026-12-12",
+       "roomSegment":"SMALL","paymentMode":"BANK_TRANSFER"}' | jq -r .reservationId)
+
+# 3. let the deadline pass "now" (it would otherwise be days away)
+docker compose -f infra/docker-compose.yml --env-file infra/.env exec postgres psql -U reservation -d reservation \
+  -c "UPDATE reservation SET payment_deadline_at = now() WHERE reservation_id = '$ID'"
+
+# 4. within one interval: CANCELLED, and a status event with reason PAYMENT_DEADLINE_MISSED on
+#    reservation-status-changed (kafka-ui, http://localhost:8090)
+curl -s http://localhost:8080/properties/AMS01/reservations/$ID -H "Authorization: Bearer $TOKEN" | jq .status
+```
+
+The demo edits the stored deadline instead of changing a setting. The deadline is always a local midnight, so no
+"days before start" value could bring the first cancellation closer than the next midnight. Editing the row does
+what the passing of time would do.
 
 ## Further reading
 
