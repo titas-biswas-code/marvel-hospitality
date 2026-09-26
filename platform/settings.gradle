@@ -16,3 +16,9 @@ project(':problem-starter').name = 'marvel-problem-spring-boot-starter'
 
 include 'outbox-starter'
 project(':outbox-starter').name = 'marvel-outbox-spring-boot-starter'
+
+include 'inbox-starter'
+project(':inbox-starter').name = 'marvel-inbox-spring-boot-starter'
+
+include 'kafka-starter'
+project(':kafka-starter').name = 'marvel-kafka-spring-boot-starter'

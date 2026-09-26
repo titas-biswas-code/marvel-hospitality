@@ -21,6 +21,8 @@ Every later PR reuses these exact versions. Do not bump without a commit that on
 | wiremock-spring-boot | `org.wiremock.integrations:wiremock-spring-boot` 4.4.2 | 2026-09-26 | https://repo1.maven.org/maven2/org/wiremock/integrations/wiremock-spring-boot/maven-metadata.xml — Boot 4 support since 4.0.8; provides `@EnableWireMock`. |
 | openapi-generator Gradle plugin | `org.openapi.generator` 7.25.0 | 2026-09-26 | https://plugins.gradle.org/m2/org/openapi/generator/org.openapi.generator.gradle.plugin/maven-metadata.xml — PR-03; `java` generator, `restclient` library with `useSpringBoot4`, `useJackson3`, `useJspecify`. |
 | Spring Security (Boot BOM) | 7.1.1 | 2026-09-26 | From Boot 4.1.1 BOM (same URL as spring-kafka). |
+| Awaitility (Boot BOM) | 4.3.0 | 2026-09-26 | From Boot 4.1.1 BOM (same URL as spring-kafka). Test-only: waits for asynchronous Kafka effects without `Thread.sleep` (PR-05). |
+| Micrometer (Boot BOM) | 1.17.1 | 2026-09-26 | From Boot 4.1.1 BOM (same URL as spring-kafka). `micrometer-core` is an API dependency of `platform/kafka-starter` (`kafka.dlt.messages`). |
 | swagger-ui image | swaggerapi/swagger-ui:v5.33.0 | 2026-09-26 | https://hub.docker.com/r/swaggerapi/swagger-ui/tags — unified dev Swagger UI (infra/README.md), not the per-service springdoc UI. |
 | Postgres image | postgres:17.11-alpine | 2026-09-26 | https://hub.docker.com/_/postgres — 17 chosen over 18.6 for Debezium maturity. |
 | Kafka image | apache/kafka:4.3.1 | 2026-09-26 | https://hub.docker.com/r/apache/kafka/tags — KRaft mode. |
@@ -78,3 +80,9 @@ Source: https://github.com/spring-projects/spring-boot/wiki/Spring-Boot-4.0-Migr
   directly.
 - All "Resolved on" dates are 2026-09-26 (date this PR's version audit was performed). Re-resolving versions for a
   later PR requires a dedicated version-bump commit — never bump incidentally inside a feature PR.
+- spring-kafka 4 Jackson 3 names: `JacksonJsonMessageConverter` / `JacksonJsonDeserializer` / `JacksonJsonSerializer`
+  (package `org.springframework.kafka.support.{converter,serializer}`) replace the Jackson 2 `Json*` classes. Boot's
+  `kafkaListenerContainerFactory` picks up `CommonErrorHandler`, `RecordMessageConverter` and `ContainerCustomizer`
+  beans, and `DefaultKafkaConsumerFactoryCustomizer` (`org.springframework.boot.kafka.autoconfigure`) customises its
+  consumer factory. `DeadLetterPublishingRecoverer` defaults to `<topic>-dlt` in spring-kafka 4; this repo sets
+  `<topic>.DLT` explicitly (PR-05).

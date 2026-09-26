@@ -44,6 +44,10 @@ dependencies {
     implementation "com.marvel.hospitality:marvel-problem-spring-boot-starter:${marvelPlatformVersion}"
     // Transactional outbox writer; Debezium publishes the rows (platform/outbox-starter, ADR-0006/0007).
     implementation "com.marvel.hospitality:marvel-outbox-spring-boot-starter:${marvelPlatformVersion}"
+    // processed_message inbox: dedupe every consumed message in the transaction of its effect (ADR-0006).
+    implementation "com.marvel.hospitality:marvel-inbox-spring-boot-starter:${marvelPlatformVersion}"
+    // Manual ack, ErrorHandlingDeserializer, blocking retries, <topic>.DLT, kafka.dlt.messages (ADR-0008).
+    implementation "com.marvel.hospitality:marvel-kafka-spring-boot-starter:${marvelPlatformVersion}"
     implementation "org.springdoc:springdoc-openapi-starter-webmvc-ui:${springdocVersion}"
     implementation 'org.flywaydb:flyway-database-postgresql'
     runtimeOnly 'org.postgresql:postgresql'
@@ -57,6 +61,8 @@ dependencies {
     testImplementation 'org.testcontainers:testcontainers-postgresql'
     testImplementation 'org.testcontainers:testcontainers-kafka'
     testImplementation "org.wiremock.integrations:wiremock-spring-boot:${wiremockSpringBootVersion}"
+    // Waiting on asynchronous effects (Kafka consumption) without Thread.sleep; version from the Boot BOM.
+    testImplementation 'org.awaitility:awaitility'
     // Shared Postgres/Kafka/Connect containers and the Debezium CDC harness (platform/outbox-starter test fixtures).
     testImplementation testFixtures("com.marvel.hospitality:marvel-outbox-spring-boot-starter:${marvelPlatformVersion}")
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'

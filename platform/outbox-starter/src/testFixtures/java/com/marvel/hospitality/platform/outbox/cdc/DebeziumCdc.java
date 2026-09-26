@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
@@ -22,6 +23,8 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.awaitility.Awaitility;
+import org.awaitility.core.ConditionTimeoutException;
 import org.testcontainers.containers.GenericContainer;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -67,27 +70,31 @@ public final class DebeziumCdc {
         }
     }
 
-    private static void awaitRunning(URI connector) throws IOException, InterruptedException {
-        Instant deadline = Instant.now().plus(CONNECTOR_START_TIMEOUT);
-        String last = "";
-        while (Instant.now().isBefore(deadline)) {
-            HttpResponse<String> status = HTTP.send(HttpRequest.newBuilder(URI.create(connector + "/status")).GET().build(),
-                    HttpResponse.BodyHandlers.ofString());
-            last = status.body();
-            if (status.statusCode() == 200) {
-                JsonNode body = JSON.readTree(last);
-                JsonNode tasks = body.path("tasks");
-                if (tasks.size() > 0 && "FAILED".equals(tasks.get(0).path("state").asString())) {
-                    throw new IllegalStateException("Connector task failed: " + last);
-                }
-                if ("RUNNING".equals(body.path("connector").path("state").asString())
-                        && tasks.size() > 0 && "RUNNING".equals(tasks.get(0).path("state").asString())) {
-                    return;
-                }
-            }
-            Thread.sleep(500);
+    private static void awaitRunning(URI connector) {
+        AtomicReference<String> last = new AtomicReference<>("");
+        try {
+            Awaitility.await().atMost(CONNECTOR_START_TIMEOUT).pollInterval(Duration.ofMillis(500))
+                    .until(() -> isRunning(connector, last));
+        } catch (ConditionTimeoutException e) {
+            throw new IllegalStateException("Connector not RUNNING within " + CONNECTOR_START_TIMEOUT + ": " + last.get(), e);
         }
-        throw new IllegalStateException("Connector not RUNNING within " + CONNECTOR_START_TIMEOUT + ": " + last);
+    }
+
+    /** @throws IllegalStateException the connector's task failed; Awaitility rethrows it at once instead of waiting */
+    private static boolean isRunning(URI connector, AtomicReference<String> last) throws IOException, InterruptedException {
+        HttpResponse<String> status = HTTP.send(HttpRequest.newBuilder(URI.create(connector + "/status")).GET().build(),
+                HttpResponse.BodyHandlers.ofString());
+        last.set(status.body());
+        if (status.statusCode() != 200) {
+            return false;
+        }
+        JsonNode body = JSON.readTree(status.body());
+        JsonNode tasks = body.path("tasks");
+        if (tasks.size() > 0 && "FAILED".equals(tasks.get(0).path("state").asString())) {
+            throw new IllegalStateException("Connector task failed: " + status.body());
+        }
+        return "RUNNING".equals(body.path("connector").path("state").asString())
+                && tasks.size() > 0 && "RUNNING".equals(tasks.get(0).path("state").asString());
     }
 
     /**

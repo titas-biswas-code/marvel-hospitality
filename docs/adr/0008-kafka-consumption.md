@@ -7,8 +7,9 @@ Consumers must never lose a payment, never double-apply one, never wedge a parti
 and must surface unprocessable messages for humans.
 
 ## Decision
-- `enable.auto.commit=false`, container `AckMode.RECORD` with manual acknowledgement after the
-  listener method returns; the listener is `@Transactional`, so the ack happens only after the DB commit.
+- `enable.auto.commit=false`, container `AckMode.MANUAL_IMMEDIATE`: the listener acknowledges only after the
+  use case it calls has committed its transaction, so a crash in between redelivers instead of losing the record.
+  After a record is dead-lettered, the error handler commits its offset (`commitRecovered`).
 - Deserialization is wrapped in `ErrorHandlingDeserializer` so malformed bytes reach the error handler
   as an exception instead of looping the container.
 - Error handler: `DefaultErrorHandler(DeadLetterPublishingRecoverer, ExponentialBackOff)` —
@@ -19,14 +20,16 @@ and must surface unprocessable messages for humans.
 - Retryable: everything else (DB unavailable, transient SQL, lock timeouts).
 - **Business outcomes are not errors**: an unmatched payment is a successful consumption that produces
   an `UNMATCHED_*` record. Only technical failures go to the DLT.
-- DLT naming `<topic>.DLT`, same partition key, spring-kafka exception headers retained. No automatic
-  DLT re-consumption; a replay script and a metric (`kafka.dlt.messages`) exist instead.
+- DLT naming `<topic>.DLT` (set explicitly: spring-kafka 4 defaults to `<topic>-dlt`), same key and same partition
+  number, original headers plus spring-kafka's `kafka_dlt-*` exception headers. No automatic DLT re-consumption;
+  `scripts/replay-dlt.sh` and a metric (`kafka.dlt.messages{topic}`) exist instead.
+- The policy lives once in `platform/kafka-starter` (ADR-0001); services only declare `@KafkaListener`s.
 - Idempotency per ADR-0006 via `processed_message`; the dedupe key per topic is in contracts/events.md.
 - Consumer concurrency = partitions (3); one listener container per topic; consumer group = service name.
 - Topics are created by infra, not by the apps.
 
 ## Consequences
-- A poison message delays its partition by at most the backoff sum (~1 minute) before landing in the DLT.
+- A poison message delays its partition by the backoff sum (1 + 2 + 4 + 8 = 15 seconds) before landing in the DLT.
 - Exactly-once is achieved by DB-side idempotency, not by Kafka transactions.
 - Humans must watch the DLT metric; this is an operational commitment stated in the README.
 

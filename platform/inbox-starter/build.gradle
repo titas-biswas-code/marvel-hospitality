@@ -1,0 +1,17 @@
+description = 'Transactional inbox: ProcessedMessageInbox joins the caller\'s own transaction via JdbcClient ' +
+        '(ADR-0006, docs/contracts/outbox-and-inbox.md)'
+
+dependencies {
+    // What every consuming service needs: a DataSource + JdbcClient.
+    api 'org.springframework.boot:spring-boot-starter-jdbc'
+
+    // No Boot 4 "-jdbc-test" starter exists (verified against the Gradle cache); spring-boot-starter-test is the
+    // only source of JUnit 5 + AssertJ + Mockito for a plain JDBC starter.
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+    testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
+    // Reuses the outbox starter's shared-Postgres test fixture instead of duplicating it.
+    testImplementation testFixtures(project(':marvel-outbox-spring-boot-starter'))
+    testRuntimeOnly 'org.postgresql:postgresql'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}

@@ -10,10 +10,10 @@ TOKEN_USER := $(if $(filter command line,$(origin USER)),$(USER),alice)
 PASSWORD   ?= password
 CLIENT     ?= bank-simulator
 
-.PHONY: help build-all test-all check-contracts up up-apps down logs reset token client-token
+.PHONY: help build-all test-all check-contracts up up-apps down clean logs reset token client-token replay-dlt
 
 help:
-	@echo "build-all | test-all | check-contracts | up | up-apps | down | logs | reset | token USER=alice | client-token CLIENT=bank-simulator"
+	@echo "build-all | test-all | check-contracts | up | up-apps | down | clean | logs | reset | token USER=alice | client-token CLIENT=bank-simulator | replay-dlt TOPIC=bank-transfer-payment-update [MAX=N] [DRY_RUN=1]"
 
 # The credit-card spec exists twice on purpose: the provider's copy (served by the stub) and the consumer's copy (the
 # reservation service generates its client from it). Each service builds from its own file; this keeps them identical.
@@ -39,14 +39,26 @@ $(ENV_FILE):
 up: $(ENV_FILE)
 	$(COMPOSE) up -d --wait
 
+# connect-init is a one-shot job: it registers the Debezium connectors and exits. `up --wait` reports any container
+# that exits as a failure (even with exit code 0) unless another service waits for it, and none does. So `up` starts
+# every other app service and waits for them to be healthy, then connect-init runs in the foreground; its exit code
+# is the real signal (non-zero when a connector does not reach RUNNING).
 up-apps: $(ENV_FILE)
-	$(COMPOSE) --profile apps up -d --wait --build
+	$(COMPOSE) --profile apps up -d --wait --build $$($(COMPOSE) --profile apps config --services | grep -vx connect-init)
+	$(COMPOSE) --profile apps run --rm connect-init
 
 down: $(ENV_FILE)
 	$(COMPOSE) --profile apps down
 
 logs: $(ENV_FILE)
 	$(COMPOSE) --profile apps logs -f
+
+# Removes everything the stack created: containers, volumes (all data), the network and the service images it built
+# (marvel-hospitality/*). Pulled images (Postgres, Kafka, Keycloak, ...) are kept, so they are not downloaded again.
+# infra/.env is kept. The next `make up-apps` starts from scratch, as on a fresh clone.
+clean: $(ENV_FILE)
+	$(COMPOSE) --profile apps down -v --remove-orphans
+	docker image rm -f $$($(COMPOSE) --profile apps config --images | grep '^marvel-hospitality/') 2>/dev/null || true
 
 # Wipes every volume (Postgres, Kafka, Keycloak) and starts again. Keycloak re-imports
 # infra/keycloak/realm/marvel-realm.json only because its database is empty again.
@@ -64,3 +76,8 @@ client-token: $(ENV_FILE)
 	@secret=$$(grep -E "^$$(echo $(CLIENT) | tr 'a-z-' 'A-Z_')_CLIENT_SECRET=" $(ENV_FILE) | cut -d= -f2-); \
 	  curl -sf -X POST $(KEYCLOAK) -d grant_type=client_credentials -d client_id=$(CLIENT) \
 	  -d client_secret=$$secret | jq -r .access_token
+
+# Replays dead-lettered records from <topic>.DLT back onto <topic> (ADR-0008's manual DLT tool).
+replay-dlt:
+	@if [ -z "$(TOPIC)" ]; then echo "usage: make replay-dlt TOPIC=<topic> [MAX=N] [DRY_RUN=1]" >&2; exit 1; fi
+	./scripts/replay-dlt.sh $(TOPIC) $(if $(MAX),--max $(MAX)) $(if $(DRY_RUN),--dry-run)
