@@ -222,6 +222,9 @@ services:
     profiles: [apps]
     environment:
       DB_PASSWORD: ${RESERVATION_DB_PASSWORD}
+      # Auto-cancel job (ADR-0010). Defaults here too, so an infra/.env created before these existed still works.
+      RESERVATION_AUTO_CANCEL_ENABLED: ${RESERVATION_AUTO_CANCEL_ENABLED:-true}
+      RESERVATION_AUTO_CANCEL_INTERVAL: ${RESERVATION_AUTO_CANCEL_INTERVAL:-PT60S}
     ports:
       - "8080:8080"
     depends_on:

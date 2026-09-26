@@ -60,21 +60,29 @@ Metrics: `reservation.autocancel.cancelled` (counter, tagged `propertyId`) and `
 ### See it happen
 
 ```
-# 1. book a BANK_TRANSFER reservation (Postman's "Reservations" folder -> "Create bank-transfer reservation",
-#    or curl) and note its id, e.g. P4145478
+# 1. poll every 5 s instead of 60 s (or set RESERVATION_AUTO_CANCEL_INTERVAL in infra/.env)
+RESERVATION_AUTO_CANCEL_INTERVAL=PT5S docker compose -f infra/docker-compose.yml --env-file infra/.env \
+  --profile apps up -d --wait room-reservation-service
 
-# 2. pretend the deadline has already passed:
-docker compose -f infra/docker-compose.yml exec postgres psql -U reservation -d reservation \
-  -c "UPDATE reservation SET payment_deadline_at = now() WHERE reservation_id = 'P4145478'"
+# 2. book a BANK_TRANSFER reservation (still PENDING_PAYMENT, deadline two days before arrival)
+TOKEN=$(make -s token)
+ID=$(curl -s -X POST http://localhost:8080/properties/AMS01/reservations \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"customerName":"Ada Lovelace","roomNumber":"101","startDate":"2026-12-10","endDate":"2026-12-12",
+       "roomSegment":"SMALL","paymentMode":"BANK_TRANSFER"}' | jq -r .reservationId)
 
-# 3. within one interval (up to 60s): GET the reservation -> CANCELLED; the status event is on
+# 3. let the deadline pass "now" (it would otherwise be days away)
+docker compose -f infra/docker-compose.yml --env-file infra/.env exec postgres psql -U reservation -d reservation \
+  -c "UPDATE reservation SET payment_deadline_at = now() WHERE reservation_id = '$ID'"
+
+# 4. within one interval: CANCELLED, and a status event with reason PAYMENT_DEADLINE_MISSED on
 #    reservation-status-changed (kafka-ui, http://localhost:8090)
+curl -s http://localhost:8080/properties/AMS01/reservations/$ID -H "Authorization: Bearer $TOKEN" | jq .status
 ```
 
-The demo edits the stored deadline rather than a setting: the deadline is always a local midnight, so no
+The demo edits the stored deadline instead of changing a setting. The deadline is always a local midnight, so no
 "days before start" value could bring the first cancellation closer than the next midnight. Editing the row does
-what the passing of time would do. The interval env vars take effect when set on the service's `environment:` in
-`infra/docker-compose.yml`, which forwards neither by default.
+what the passing of time would do.
 
 ## Further reading
 
