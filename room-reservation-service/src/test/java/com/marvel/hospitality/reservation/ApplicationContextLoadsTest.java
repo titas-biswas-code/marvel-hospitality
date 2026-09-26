@@ -2,10 +2,13 @@ package com.marvel.hospitality.reservation;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.marvel.hospitality.platform.outbox.OutboxPurgeJob;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.test.context.ActiveProfiles;
@@ -20,8 +23,18 @@ class ApplicationContextLoadsTest {
     @LocalServerPort
     int port;
 
+    @Autowired
+    ApplicationContext applicationContext;
+
     @Test
     void contextLoads() {
+    }
+
+    @Test
+    void registersOutboxPurgeJob() {
+        // platform/outbox-starter wires the daily purge job (MarvelOutboxAutoConfiguration) whenever a JdbcClient
+        // bean exists; this service must not silently lose it (docs/contracts/outbox-and-inbox.md retention).
+        assertThat(applicationContext.getBean(OutboxPurgeJob.class)).isNotNull();
     }
 
     @Test

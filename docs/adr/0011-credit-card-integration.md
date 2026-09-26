@@ -16,8 +16,12 @@ status; confirm the room if `CONFIRMED`, otherwise throw an error. The provided 
   5. on timeout / 5xx / circuit open: `503 PAYMENT_SERVICE_UNAVAILABLE` with `Retry-After`, nothing persisted.
   A DB transaction is never held across the remote call.
 - Client generated from the **corrected** spec with `openapi-generator` (Java, `restclient` library) at
-  build time; defects corrected and listed in the spec header and README (the spec as provided is kept unchanged in
-  `credit-card-payment-api.original.yaml` for diffing; the corrections change nothing on the wire):
+  build time; defects corrected and listed in the spec header and `docs/credit-card-spec-defects.md` (the spec as
+  provided is kept unchanged in `docs/contracts/credit-card-payment-api.original.yaml` for diffing; the corrections
+  change nothing on the wire). The corrected spec lives with the code: the provider's copy in
+  `credit-card-payment-service/src/main/resources/openapi/` and the consumer's identical copy in
+  `room-reservation-service/src/main/resources/openapi/`, kept equal by `make check-contracts`, so no build reads
+  from `docs/`. Defects:
   malformed server URL, `format: enum` misuse, driving-licence description leftover, `datetime` format.
 - Resilience4j on the client: connect timeout 1s, read timeout 2s; retry 2 attempts on 5xx/IOException
   (not on 4xx), 200ms backoff; circuit breaker sliding window 20, failure threshold 50%, open 10s, half-open 3;

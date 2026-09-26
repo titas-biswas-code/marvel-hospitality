@@ -11,7 +11,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.web.client.RestClient;
 
 /**
- * Builds the client generated from docs/contracts/credit-card-payment-api.yaml on top of Boot's
+ * Builds the client generated from src/main/resources/openapi/credit-card-payment-api.yaml on top of Boot's
  * {@link RestClient.Builder} (so it gets Boot's Jackson 3 mapper and HTTP observations), with this client's own
  * connect/read timeouts on a JDK {@code HttpClient}.
  *

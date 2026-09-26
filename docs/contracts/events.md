@@ -12,7 +12,7 @@ all amounts decimal numbers with 2 fraction digits (never floats in code: `BigDe
 | `eventVersion` | `1` |
 | `producer` | service name |
 | `occurredAt` | ISO-8601 UTC |
-| `propertyId` | present when the aggregate is property-scoped (absent on the bank topic) |
+| `propertyId` | the property; on the bank topic, where the aggregate has none, the header is present with a null value |
 | `traceparent` | W3C trace context, propagated by Micrometer tracing |
 
 Debezium Outbox Event Router places these from outbox columns (see `outbox-and-inbox.md`).

@@ -25,7 +25,7 @@ make reset                     # wipes ALL volumes (postgres, kafka, keycloak) a
 | postgres | 5432 | one Postgres instance, three databases: `reservation`, `payment`, `notification` |
 | kafka | 9094 | `EXTERNAL` listener, for host tools / IDE runs. Inside compose, other containers use `kafka:9092`. |
 | kafka-ui | http://localhost:8090 | web UI, also shows Kafka Connect connectors |
-| Kafka Connect REST | http://localhost:8083 | Debezium connectors are registered here from PR-04 |
+| Kafka Connect REST | http://localhost:8083 | Debezium connectors `reservation-outbox`, `payment-outbox` (`/connectors?expand=status`) |
 | Keycloak | http://localhost:8180 | admin console at `/admin`, login `admin`/`admin`. Management/health port 9000 is **not** published to the host. |
 | Grafana (otel-lgtm) | http://localhost:3000 | OTLP ingest on 4317 (gRPC) / 4318 (HTTP). Not wired into any service until PR-10. |
 | room-reservation-service | 8080 | app service, added under compose profile `apps` from PR-01 |
@@ -56,7 +56,18 @@ make reset                     # wipes ALL volumes (postgres, kafka, keycloak) a
   connectors.
 
 - **connect** (`quay.io/debezium/connect:3.6.3.Final`): Kafka Connect with Debezium bundled (Postgres
-  connector + Outbox Event Router). No connectors are registered by this PR — that starts in PR-04.
+  connector + Outbox Event Router). Publishes each service's `outbox_event` rows to the topic named in the
+  row (ADR-0007). Connector configs: `infra/debezium/<connector-name>.json`; they read the database password
+  from the worker's environment (`${env:PAYMENT_DB_PASSWORD}`, Kafka's `EnvVarConfigProvider`), so no secret is
+  in the JSON.
+
+- **connect-init** (same image, profile `apps`, one-shot): `infra/connect-init/register-connectors.sh` does an
+  idempotent `PUT /connectors/<name>/config` for every file in `infra/debezium/` and waits until each connector
+  and its task are `RUNNING`. It runs only after both outbox services are healthy, because a connector's
+  filtered publication needs the `outbox_event` table their Flyway migrations create. Rows written before it
+  runs are not lost: the connector's initial snapshot publishes them. Re-run by hand (e.g. after editing a
+  connector JSON, or when the services run from the IDE instead of compose):
+  `docker compose -f infra/docker-compose.yml --env-file infra/.env run --rm --no-deps connect-init`.
 
 - **keycloak** (`quay.io/keycloak/keycloak:26.7.4`): IdP for the `marvel` realm. Started with
   `--import-realm`, which imports `infra/keycloak/realm/marvel-realm.json` **only if the realm does not
@@ -66,8 +77,8 @@ make reset                     # wipes ALL volumes (postgres, kafka, keycloak) a
 - **otel-lgtm** (`grafana/otel-lgtm:0.34.0`): Grafana + Loki + Tempo + Prometheus bundle, OTLP receiver.
   Not consumed by any service until observability is wired up in PR-10.
 
-Every long-running container above has a Docker healthcheck; `kafka-init` is the one exception and is
-expected to exit successfully rather than stay healthy.
+Every long-running container above has a Docker healthcheck; `kafka-init` and `connect-init` are the
+exceptions and are expected to exit successfully rather than stay healthy.
 
 ## Application images
 
@@ -131,6 +142,34 @@ docker compose up -d --wait                                # fresh containers, r
 
 Use it whenever you want a clean slate, or to verify that a realm change committed via
 `infra/keycloak/export.sh` actually imports correctly (see `infra/keycloak/README.md`).
+
+## Runbook: replication slots (Debezium)
+
+Each connector owns a logical replication slot in Postgres (`reservation_outbox`, `payment_outbox`). While a
+connector is stopped, Postgres keeps the WAL its slot still needs, so events are delayed, not lost. The retained
+WAL is capped by `max_slot_wal_keep_size=1GB`: past that, Postgres **invalidates** the slot (to protect its disk)
+and the connector can no longer resume from it.
+
+```
+# lag per slot (bytes of WAL not yet confirmed by the connector)
+docker compose -f infra/docker-compose.yml --env-file infra/.env exec postgres psql -U postgres -c \
+  "select slot_name, database, active, wal_status, pg_size_pretty(pg_wal_lsn_diff(pg_current_wal_lsn(), confirmed_flush_lsn)) as lag from pg_replication_slots"
+# connector and task state
+curl -s localhost:8083/connectors?expand=status | jq
+```
+
+Recreating a connector whose slot is invalidated (`wal_status = lost`) or broken:
+
+```
+curl -X DELETE localhost:8083/connectors/payment-outbox
+docker compose -f infra/docker-compose.yml --env-file infra/.env exec postgres psql -U postgres -d payment -c \
+  "select pg_drop_replication_slot('payment_outbox')"
+docker compose -f infra/docker-compose.yml --env-file infra/.env run --rm --no-deps connect-init
+```
+
+The new connector snapshots the outbox table (rows from the last 7 days, see the purge job) and then streams again.
+Events can therefore be published twice; consumers deduplicate (inbox, ADR-0006). Events whose rows were already
+purged and whose WAL was lost are gone from Kafka; the ledger/reservation tables still hold the state.
 
 ## Secrets
 

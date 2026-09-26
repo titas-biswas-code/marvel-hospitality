@@ -33,7 +33,7 @@ management:
 
 springdoc:
   # The generated OpenAPI resource is disabled (see api/OpenApiSpecController): this stub serves the
-  # hand-corrected YAML (docs/contracts/credit-card-payment-api.yaml) instead of springdoc's introspected
+  # hand-corrected YAML (src/main/resources/openapi/credit-card-payment-api.yaml) instead of springdoc's introspected
   # one. `api-docs.enabled: false` looked like the obvious switch but it also disables SwaggerConfig's
   # ConditionalOnBean(SpringDocConfiguration.class), which kills Swagger UI too. `enable-default-api-docs:
   # false` disables only the generated OpenApiWebMvcResource bean at /v3/api-docs, leaving SpringDocConfiguration

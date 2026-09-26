@@ -18,6 +18,11 @@ spring:
       ddl-auto: validate
   flyway:
     enabled: true
+  jackson:
+    write:
+      # Amounts are scale-2 BigDecimals; never let them render as 1.2E+2 (ADR-0016). This also shapes the outbox
+      # payload, and so the bank-transfer-payment-update value on the wire.
+      write-bigdecimal-as-plain: true
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9094}
     admin:

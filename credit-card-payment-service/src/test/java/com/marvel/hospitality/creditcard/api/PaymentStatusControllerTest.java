@@ -22,7 +22,7 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
- * Every branch of the deterministic stub (docs/contracts/credit-card-payment-api.yaml, ADR-0011): prefix
+ * Every branch of the deterministic stub (src/main/resources/openapi/credit-card-payment-api.yaml, ADR-0011): prefix
  * routing, the two 200 outcomes, 404, 500 and the two 400 cases handled by
  * {@link PaymentStatusExceptionHandling}. The clock is fixed so {@code lastUpdateDate} is asserted exactly,
  * and {@code slow-delay} is overridden to 300ms so the SLOW-prefix test does not actually wait 5 seconds.

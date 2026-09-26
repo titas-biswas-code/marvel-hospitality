@@ -1,9 +1,8 @@
 # syntax=docker/dockerfile:1
-# Build context: repo root (needs ../docs/contracts/credit-card-payment-api.yaml) — see infra/docker-compose.yml.
+# Build context: repo root, like every service image — see infra/docker-compose.yml.
 
 # ---- build: compile with the Gradle wrapper on a JDK 25 image ----
 FROM gradle:9.8.0-jdk25-noble AS build
-COPY docs/contracts /workspace/docs/contracts
 WORKDIR /workspace/credit-card-payment-service
 COPY credit-card-payment-service/gradlew credit-card-payment-service/settings.gradle credit-card-payment-service/build.gradle ./
 COPY credit-card-payment-service/gradle gradle

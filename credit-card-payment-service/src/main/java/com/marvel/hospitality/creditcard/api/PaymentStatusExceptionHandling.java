@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /**
- * The two ways {@code POST /payment-status} answers {@code 400} (docs/contracts/credit-card-payment-api.yaml):
+ * The two ways {@code POST /payment-status} answers {@code 400} (src/main/resources/openapi/credit-card-payment-api.yaml):
  * a missing/blank {@code paymentReference} ({@link MethodArgumentNotValidException}, from {@code @NotBlank})
  * or a body that is not readable JSON at all ({@link HttpMessageNotReadableException}, including a missing
  * body). Kept as the spec's own {@link ErrorResponse} shape, not {@code ProblemDetail} — this service's

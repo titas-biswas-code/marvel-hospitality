@@ -20,15 +20,15 @@
   | clientId | type | grants | purpose |
   |---|---|---|---|
   | `marvel-postman` | public | password (direct access grants, dev only), authorization code | humans / Postman |
-  | `bank-simulator` | confidential, service account | client credentials | simulator → payment service; roles `bank:ingest` |
+  | `bank-simulator` | confidential, service account | client credentials | simulator → payment service; roles `bank:ingest`, `bank:read` |
   | `room-reservation-service` | confidential, service account | client credentials | reserved for future S2S calls (ADR-0012) |
   | `bank-transfer-payment-service` | confidential, service account | client credentials | idem |
 - Users (dev only, password `password`):
   | user | roles | properties |
   |---|---|---|
-  | `alice` | reservation:read, reservation:write | AMS01, RTM01 |
-  | `bob` | reservation:read, reservation:write | AMS01 |
-  | `carol` | reservation:read | RTM01 |
+  | `alice` | reservation:read, reservation:write, bank:read | AMS01, RTM01 |
+  | `bob` | reservation:read, reservation:write, bank:read | AMS01 |
+  | `carol` | reservation:read, bank:read | RTM01 |
 - Token one-liner (README + Postman pre-request script):
   `curl -s -X POST http://localhost:8180/realms/marvel/protocol/openid-connect/token -d grant_type=password -d client_id=marvel-postman -d username=alice -d password=password | jq -r .access_token`
 - Tests: `spring-security-test` `jwt()` request post-processor with `claim("properties", List.of("AMS01"))`

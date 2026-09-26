@@ -10,16 +10,26 @@ TOKEN_USER := $(if $(filter command line,$(origin USER)),$(USER),alice)
 PASSWORD   ?= password
 CLIENT     ?= bank-simulator
 
-.PHONY: help build-all test-all up up-apps down logs reset token client-token
+.PHONY: help build-all test-all check-contracts up up-apps down logs reset token client-token
 
 help:
-	@echo "build-all | test-all | up | up-apps | down | logs | reset | token USER=alice | client-token CLIENT=bank-simulator"
+	@echo "build-all | test-all | check-contracts | up | up-apps | down | logs | reset | token USER=alice | client-token CLIENT=bank-simulator"
 
-build-all:
+# The credit-card spec exists twice on purpose: the provider's copy (served by the stub) and the consumer's copy (the
+# reservation service generates its client from it). Each service builds from its own file; this keeps them identical.
+CC_SPEC_PROVIDER := credit-card-payment-service/src/main/resources/openapi/credit-card-payment-api.yaml
+CC_SPEC_CONSUMER := room-reservation-service/src/main/resources/openapi/credit-card-payment-api.yaml
+
+check-contracts:
+	@cmp -s $(CC_SPEC_PROVIDER) $(CC_SPEC_CONSUMER) \
+	  || { echo "credit-card spec copies differ: diff $(CC_SPEC_PROVIDER) $(CC_SPEC_CONSUMER)" >&2; exit 1; }
+	@echo "credit-card spec copies identical"
+
+build-all: check-contracts
 	@echo "==> $(PLATFORM)"; (cd $(PLATFORM) && ./gradlew build --console=plain)
 	@set -e; for s in $(SERVICES); do echo "==> $$s"; (cd $$s && ./gradlew build --console=plain); done
 
-test-all:
+test-all: check-contracts
 	@echo "==> $(PLATFORM)"; (cd $(PLATFORM) && ./gradlew test --console=plain)
 	@set -e; for s in $(SERVICES); do echo "==> $$s"; (cd $$s && ./gradlew test --console=plain); done
 

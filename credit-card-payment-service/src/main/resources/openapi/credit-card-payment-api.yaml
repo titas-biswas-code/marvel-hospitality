@@ -1,6 +1,10 @@
-# CORRECTED copy of the provided credit-card-payment-service spec. The spec as provided is kept unchanged next to it,
-# in credit-card-payment-api.original.yaml, so every difference below can be checked with a plain diff. Nothing here
-# changes a request or response on the wire: the path, the JSON field names and the status codes are the provider's.
+# CORRECTED copy of the provided credit-card-payment-service spec. Two identical copies exist: the provider's
+# (credit-card-payment-service/src/main/resources/openapi/, served by the stub) and the consumer's
+# (room-reservation-service/src/main/resources/openapi/, the generated client is built from it). Change both together;
+# `make check-contracts` fails if they differ. The spec as provided is kept unchanged in
+# docs/contracts/credit-card-payment-api.original.yaml, so every difference below can be checked with a plain diff.
+# Nothing here changes a request or response on the wire: the path, the JSON field names and the status codes are
+# the provider's.
 # Defects found in the original (documented in README and ADR-0011):
 #   1. servers.url was "http//:localhost:9090//host/credit-card-payment-api" (malformed scheme, double slash, stray "host").
 #   2. PaymentStatusResponse.status used "format: enum" with a nested list; must be "enum: [...]".

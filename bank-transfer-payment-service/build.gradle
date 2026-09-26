@@ -32,6 +32,10 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-kafka'
     // JWT resource server, role + property authorization, 401/403 ProblemDetail, /whoami (platform/security-starter).
     implementation "com.marvel.hospitality:marvel-security-spring-boot-starter:${marvelPlatformVersion}"
+    // ProblemDetail fallback advice, VALIDATION_FAILED shape, constraint-name lookup (platform/problem-starter).
+    implementation "com.marvel.hospitality:marvel-problem-spring-boot-starter:${marvelPlatformVersion}"
+    // Transactional outbox writer + daily purge; Debezium publishes the rows (platform/outbox-starter, ADR-0006/0007).
+    implementation "com.marvel.hospitality:marvel-outbox-spring-boot-starter:${marvelPlatformVersion}"
     implementation "org.springdoc:springdoc-openapi-starter-webmvc-ui:${springdocVersion}"
     implementation 'org.flywaydb:flyway-database-postgresql'
     runtimeOnly 'org.postgresql:postgresql'
@@ -43,11 +47,19 @@ dependencies {
     testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
     testImplementation 'org.testcontainers:testcontainers-postgresql'
     testImplementation 'org.testcontainers:testcontainers-kafka'
+    // Shared Postgres/Kafka/Connect containers and the Debezium CDC harness (platform/outbox-starter test fixtures).
+    testImplementation testFixtures("com.marvel.hospitality:marvel-outbox-spring-boot-starter:${marvelPlatformVersion}")
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 tasks.named('test') {
-    useJUnitPlatform()
+    useJUnitPlatform {
+        // CDC tests (@Tag("cdc"), Kafka + Debezium Connect containers) are part of every build; `-PskipCdc` leaves
+        // them out for a quicker local loop.
+        if (project.hasProperty('skipCdc')) {
+            excludeTags 'cdc'
+        }
+    }
 }
 
 // Only the executable jar is needed (Dockerfile copies build/libs/*.jar).

@@ -21,7 +21,7 @@ re-running after an edit applies that edit and re-running with no edit is a no-o
 - 4 clients (`marvel-postman`, `bank-simulator`, `room-reservation-service`, `bank-transfer-payment-service`);
 - 3 human users (`alice`, `bob`, `carol`);
 - service accounts for the 3 confidential clients, each with `properties=["*"]` (all properties); the
-  `bank-simulator` service account is additionally granted `bank:ingest`.
+  `bank-simulator` service account is additionally granted `bank:ingest` and `bank:read`.
 
 `export.sh` turns the running realm into the committed file. Keycloak's dev database (`dev-file`) cannot be
 opened by two processes at once, so the script stops the `keycloak` container, runs
@@ -52,9 +52,9 @@ Password `password` for all three (dev only; `DEV_USER_PASSWORD` in `infra/.env`
 
 | user | roles | properties |
 |---|---|---|
-| `alice` | `reservation:read`, `reservation:write` | `AMS01`, `RTM01` |
-| `bob` | `reservation:read`, `reservation:write` | `AMS01` |
-| `carol` | `reservation:read` | `RTM01` |
+| `alice` | `reservation:read`, `reservation:write`, `bank:read` | `AMS01`, `RTM01` |
+| `bob` | `reservation:read`, `reservation:write`, `bank:read` | `AMS01` |
+| `carol` | `reservation:read`, `bank:read` | `RTM01` |
 
 ## Clients
 
@@ -64,7 +64,7 @@ Secrets come from `infra/.env` (`BANK_SIMULATOR_CLIENT_SECRET`, `ROOM_RESERVATIO
 | clientId | type | grants | purpose |
 |---|---|---|---|
 | `marvel-postman` | public | password (dev only), authorization code | humans / Postman |
-| `bank-simulator` | confidential, service account | client credentials | simulator → payment service; role `bank:ingest` |
+| `bank-simulator` | confidential, service account | client credentials | simulator → payment service; roles `bank:ingest`, `bank:read` |
 | `room-reservation-service` | confidential, service account | client credentials | reserved for future service-to-service calls (ADR-0012) |
 | `bank-transfer-payment-service` | confidential, service account | client credentials | reserved for future service-to-service calls (ADR-0012) |
 

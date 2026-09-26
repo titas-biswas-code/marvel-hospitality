@@ -11,6 +11,11 @@ connector per service database (`reservation-outbox`, `payment-outbox`). Configu
 `infra/debezium/*.json`, registered idempotently by a `connect-init` container. Routing by the
 `topic` column; key from `aggregate_id`; headers from the metadata columns (contracts/outbox-and-inbox.md).
 
+The Kafka value is the `payload` jsonb text **as stored** (`table.expand.json.payload=false` + `StringConverter`), not
+a JSON document rebuilt inside Connect. Found while implementing PR-04 (Debezium 3.6.3 source): expansion infers a
+Connect schema from the JSON, so decimals become doubles (`120.00` → `120.0`) and `null` fields are dropped by
+default. Both would break the event contracts (amounts at 2 fraction digits; `"previousStatus": null`).
+
 ## Consequences
 - Zero application code on the publish path and no polling latency; exactly the pattern the assessment asks to see.
 - Delivery is at-least-once (connector restarts replay from the last committed LSN); consumers dedupe (ADR-0006).
