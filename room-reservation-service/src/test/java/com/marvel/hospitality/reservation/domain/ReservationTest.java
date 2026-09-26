@@ -34,7 +34,7 @@ class ReservationTest {
         return switch (mode) {
             case CASH -> new CashPaymentModeHandler();
             case BANK_TRANSFER -> new BankTransferPaymentModeHandler(new PaymentDeadlinePolicy());
-            case CREDIT_CARD -> throw new UnsupportedOperationException("CREDIT_CARD arrives in PR-03");
+            case CREDIT_CARD -> new CreditCardPaymentModeHandler();
         };
     }
 
@@ -55,6 +55,35 @@ class ReservationTest {
         assertThat(reservation.status()).isEqualTo(ReservationStatus.CONFIRMED);
         assertThat(reservation.paymentDeadlineAt()).isNull();
         assertThat(reservation.totalAmount()).isEqualTo(Money.eur("240.00"));
+    }
+
+    @Test
+    void confirmsCreditCardReservationImmediately() {
+        NewReservation request = new NewReservation(ReservationId.of("P4145478"), "Ada Lovelace",
+                LocalDate.parse("2026-10-10"), LocalDate.parse("2026-10-12"), RoomSegment.MEDIUM, PaymentMode.CREDIT_CARD,
+                "OK-123");
+
+        Reservation reservation = Reservation.create(
+                request, PROPERTY, MEDIUM_ROOM, NIGHTLY_RATE, handlerFor(PaymentMode.CREDIT_CARD), CLOCK);
+
+        assertThat(reservation.status()).isEqualTo(ReservationStatus.CONFIRMED);
+        assertThat(reservation.paymentReference()).isEqualTo("OK-123");
+        assertThat(reservation.paymentDeadlineAt()).isNull();
+        assertThat(reservation.pullEvents()).singleElement()
+                .satisfies(event -> assertThat(event.status()).isEqualTo(ReservationStatus.CONFIRMED));
+    }
+
+    @Test
+    void checkCreatableAppliesTheModeIndependentRulesWithoutCreatingAnything() {
+        assertThat(Reservation.checkCreatable(LocalDate.parse("2026-10-10"), LocalDate.parse("2026-10-12"),
+                RoomSegment.MEDIUM, PROPERTY, MEDIUM_ROOM, CLOCK))
+                .isEqualTo(new StayPeriod(LocalDate.parse("2026-10-10"), LocalDate.parse("2026-10-12")));
+        assertThatThrownBy(() -> Reservation.checkCreatable(LocalDate.parse("2026-10-10"), LocalDate.parse("2026-10-12"),
+                RoomSegment.LARGE, PROPERTY, MEDIUM_ROOM, CLOCK))
+                .isInstanceOf(RoomSegmentMismatchException.class);
+        assertThatThrownBy(() -> Reservation.checkCreatable(LocalDate.parse("2026-09-01"), LocalDate.parse("2026-09-03"),
+                RoomSegment.MEDIUM, PROPERTY, MEDIUM_ROOM, CLOCK))
+                .isInstanceOf(InvalidStayException.class);
     }
 
     static Stream<Arguments> dstDeadlines() {

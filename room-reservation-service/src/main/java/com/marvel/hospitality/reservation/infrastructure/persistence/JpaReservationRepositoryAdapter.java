@@ -1,11 +1,14 @@
 package com.marvel.hospitality.reservation.infrastructure.persistence;
 
 import com.marvel.hospitality.platform.problem.ConstraintNames;
+import com.marvel.hospitality.reservation.application.PaymentReferenceAlreadyUsedException;
 import com.marvel.hospitality.reservation.application.ReservationIdCollisionException;
 import com.marvel.hospitality.reservation.application.ReservationRepository;
 import com.marvel.hospitality.reservation.application.RoomUnavailableException;
+import com.marvel.hospitality.reservation.domain.PaymentMode;
 import com.marvel.hospitality.reservation.domain.Reservation;
 import com.marvel.hospitality.reservation.domain.ReservationId;
+import com.marvel.hospitality.reservation.domain.StayPeriod;
 import jakarta.persistence.EntityManager;
 import java.util.Optional;
 import org.springframework.stereotype.Repository;
@@ -30,6 +33,8 @@ class JpaReservationRepositoryAdapter implements ReservationRepository {
     static final String OVERLAP_CONSTRAINT = "reservation_no_overlap";
     // Postgres's default name for an inline `UNIQUE` column constraint: "<table>_<column>_key".
     static final String RESERVATION_ID_UNIQUE_CONSTRAINT = "reservation_reservation_id_key";
+    // A unique index, not a table constraint (it is partial); Postgres reports the index name. V2 migration.
+    static final String CREDIT_CARD_PAYMENT_REFERENCE_UNIQUE_INDEX = "reservation_credit_card_payment_reference_uq";
 
     private final EntityManager entityManager;
     private final ReservationJpaRepository jpaRepository;
@@ -53,6 +58,10 @@ class JpaReservationRepositoryAdapter implements ReservationRepository {
             if (constraint.isPresent() && RESERVATION_ID_UNIQUE_CONSTRAINT.equals(constraint.get())) {
                 throw new ReservationIdCollisionException(reservation.reservationId().value(), ex);
             }
+            if (constraint.isPresent() && CREDIT_CARD_PAYMENT_REFERENCE_UNIQUE_INDEX.equals(constraint.get())) {
+                throw new PaymentReferenceAlreadyUsedException(
+                        reservation.paymentMode(), String.valueOf(reservation.paymentReference()), ex);
+            }
             throw ex;
         }
     }
@@ -61,5 +70,15 @@ class JpaReservationRepositoryAdapter implements ReservationRepository {
     public Optional<Reservation> find(String propertyId, ReservationId reservationId) {
         return jpaRepository.findByPropertyIdAndReservationId(propertyId, reservationId.value())
                 .map(entity -> Reservation.rehydrate(entity.toDomainState()));
+    }
+
+    @Override
+    public boolean isBooked(String propertyId, String roomNumber, StayPeriod stay) {
+        return jpaRepository.existsOverlapping(propertyId, roomNumber, stay.startDate(), stay.endDate());
+    }
+
+    @Override
+    public boolean isPaymentReferenceUsed(PaymentMode mode, String paymentReference) {
+        return jpaRepository.existsByPaymentModeAndPaymentReference(mode, paymentReference);
     }
 }

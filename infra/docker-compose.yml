@@ -173,8 +173,22 @@ services:
   # (set via SPRING_PROFILES_ACTIVE=local in its Dockerfile) already defaults DB host, Kafka bootstrap
   # servers, JWT issuer/JWKS URIs and the CORS-allowed origin for this compose network — see each
   # service's application.yml. Only the DB password (a secret) is overridden here.
+  # PR-03: the credit-card payment stub. No dependencies of its own (in-memory, no DB, no Kafka).
+  credit-card-payment-service:
+    build: { context: .., dockerfile: credit-card-payment-service/Dockerfile }
+    image: marvel-hospitality/credit-card-payment-service:local
+    profiles: [apps]
+    ports:
+      - "9090:9090"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c \"exec 3<>/dev/tcp/127.0.0.1/9090 && printf 'GET /actuator/health/readiness HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q 'HTTP/1.1 200' <&3\""]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
   room-reservation-service:
-    # Context is the repo root, not this service's dir: the build needs ../platform (platform/security-starter).
+    # Context is the repo root, not this service's dir: the build needs ../platform and ../docs/contracts.
     build: { context: .., dockerfile: room-reservation-service/Dockerfile }
     image: marvel-hospitality/room-reservation-service:local
     profiles: [apps]
@@ -189,6 +203,10 @@ services:
         condition: service_healthy
       kafka-init:
         condition: service_completed_successfully
+      # Started, not healthy, on purpose: the reservation service's circuit breaker handles an absent
+      # stub (ADR-0011), and the 5-minute demo never exercises CREDIT_CARD, so it must not block on this.
+      credit-card-payment-service:
+        condition: service_started
     healthcheck:
       # No curl/wget in eclipse-temurin:25-jre-noble: raw HTTP over bash /dev/tcp (same technique as keycloak
       # above). Ubuntu's default /bin/sh is dash, which lacks /dev/tcp, so bash is invoked explicitly.
@@ -242,10 +260,11 @@ services:
       retries: 20
       start_period: 40s
 
-  # Dev convenience only: one Swagger UI with a per-service dropdown, so nobody has to remember three
+  # Dev convenience only: one Swagger UI with a per-service dropdown, so nobody has to remember four
   # separate /swagger-ui.html URLs. Each service still serves its own Swagger UI too. The browser fetches
   # each service's OpenAPI spec cross-origin from :8088, which is why the services' `local` profile allows
-  # CORS from http://localhost:8088 (marvel.security.cors-allowed-origins).
+  # CORS from http://localhost:8088 (marvel.security.cors-allowed-origins; credit-card-payment-service has
+  # no security starter, so it wires the same allowance itself via credit-card-stub.cors-allowed-origins).
   swagger-ui:
     image: swaggerapi/swagger-ui:v5.33.0
     profiles: [apps]
@@ -254,7 +273,8 @@ services:
         [
           {"url": "http://localhost:8080/v3/api-docs", "name": "room-reservation-service"},
           {"url": "http://localhost:8081/v3/api-docs", "name": "bank-transfer-payment-service"},
-          {"url": "http://localhost:8082/v3/api-docs", "name": "notification-service"}
+          {"url": "http://localhost:8082/v3/api-docs", "name": "notification-service"},
+          {"url": "http://localhost:9090/v3/api-docs", "name": "credit-card-payment-service"}
         ]
       URLS_PRIMARY_NAME: room-reservation-service
       PERSIST_AUTHORIZATION: "true"
@@ -266,6 +286,8 @@ services:
       bank-transfer-payment-service:
         condition: service_healthy
       notification-service:
+        condition: service_healthy
+      credit-card-payment-service:
         condition: service_healthy
     healthcheck:
       # swaggerapi/swagger-ui has wget (checked: `docker run --rm --entrypoint sh swaggerapi/swagger-ui:v5.33.0

@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.marvel.hospitality.platform.problem.ConstraintNames;
 import com.marvel.hospitality.reservation.TestcontainersConfiguration;
 import com.marvel.hospitality.reservation.application.PropertyCatalog;
+import com.marvel.hospitality.reservation.application.PaymentReferenceAlreadyUsedException;
 import com.marvel.hospitality.reservation.application.ReservationIdCollisionException;
 import com.marvel.hospitality.reservation.application.ReservationRepository;
 import com.marvel.hospitality.reservation.application.RoomUnavailableException;
@@ -127,6 +128,59 @@ class ReservationPersistenceTest {
         // Same room, fully overlapping dates: only blocked if the exclusion constraint still counted the cancelled row.
         reservations.add(reservation(
                 "P0000006", "AMS01", "201", LocalDate.parse("2030-03-01"), LocalDate.parse("2030-03-05"), ReservationStatus.PENDING_PAYMENT));
+    }
+
+    @Test
+    void creditCardPaymentReferenceCanBackOnlyOneReservationAcrossProperties() {
+        reservations.add(paidReservation("P0000040", "AMS01", "101", LocalDate.parse("2034-01-10"),
+                LocalDate.parse("2034-01-12"), PaymentMode.CREDIT_CARD, "OK-UNIQUE-1"));
+        assertThat(reservations.isPaymentReferenceUsed(PaymentMode.CREDIT_CARD, "OK-UNIQUE-1")).isTrue();
+        assertThat(reservations.isPaymentReferenceUsed(PaymentMode.CREDIT_CARD, "OK-UNIQUE-2")).isFalse();
+
+        // Last: the violation aborts this test's Postgres transaction, so nothing may query after it.
+        // Different property, different room and dates: only the reference is shared, and that alone is rejected.
+        assertThatThrownBy(() -> reservations.add(paidReservation("P0000041", "RTM01", "202",
+                LocalDate.parse("2034-02-10"), LocalDate.parse("2034-02-12"), PaymentMode.CREDIT_CARD, "OK-UNIQUE-1")))
+                .isInstanceOf(PaymentReferenceAlreadyUsedException.class)
+                .hasMessageContaining("OK-UNIQUE-1");
+    }
+
+    @Test
+    void cashAndBankTransferReferencesMayRepeat() {
+        reservations.add(paidReservation("P0000042", "AMS01", "101", LocalDate.parse("2034-03-10"),
+                LocalDate.parse("2034-03-12"), PaymentMode.CASH, "FRONT-DESK-1"));
+        reservations.add(paidReservation("P0000043", "AMS01", "102", LocalDate.parse("2034-03-10"),
+                LocalDate.parse("2034-03-12"), PaymentMode.CASH, "FRONT-DESK-1"));
+        // The card index is partial: a card payment may even share its reference with a cash one.
+        reservations.add(paidReservation("P0000044", "AMS01", "201", LocalDate.parse("2034-03-10"),
+                LocalDate.parse("2034-03-12"), PaymentMode.CREDIT_CARD, "FRONT-DESK-1"));
+
+        assertThat(reservations.isPaymentReferenceUsed(PaymentMode.CASH, "FRONT-DESK-1")).isTrue();
+    }
+
+    @Test
+    void isBookedMirrorsTheExclusionConstraint() {
+        reservations.add(reservation("P0000030", "AMS01", "102", LocalDate.parse("2033-01-10"), LocalDate.parse("2033-01-15")));
+
+        // Overlapping non-cancelled stay on the same room: booked.
+        assertThat(reservations.isBooked("AMS01", "102",
+                new StayPeriod(LocalDate.parse("2033-01-12"), LocalDate.parse("2033-01-20")))).isTrue();
+
+        // Adjacent stay (this stay's start equals the existing reservation's end): the half-open range must not
+        // treat checkout-day-equals-next-checkin-day as an overlap, exactly like the exclusion constraint.
+        assertThat(reservations.isBooked("AMS01", "102",
+                new StayPeriod(LocalDate.parse("2033-01-15"), LocalDate.parse("2033-01-18")))).isFalse();
+
+        // Same dates, different room: not booked.
+        assertThat(reservations.isBooked("AMS01", "101",
+                new StayPeriod(LocalDate.parse("2033-01-10"), LocalDate.parse("2033-01-15")))).isFalse();
+
+        // A cancelled reservation must not block the room, same as the exclusion constraint's
+        // WHERE (status <> 'CANCELLED').
+        reservations.add(reservation("P0000031", "AMS01", "301",
+                LocalDate.parse("2033-02-01"), LocalDate.parse("2033-02-05"), ReservationStatus.CANCELLED));
+        assertThat(reservations.isBooked("AMS01", "301",
+                new StayPeriod(LocalDate.parse("2033-02-01"), LocalDate.parse("2033-02-05")))).isFalse();
     }
 
     @Test
@@ -290,6 +344,17 @@ class ReservationPersistenceTest {
 
     private static Reservation reservation(
             String reservationId, String propertyId, String roomNumber, LocalDate start, LocalDate end, ReservationStatus status) {
+        return reservation(reservationId, propertyId, roomNumber, start, end, status, PaymentMode.CASH, null);
+    }
+
+    private static Reservation paidReservation(String reservationId, String propertyId, String roomNumber, LocalDate start,
+            LocalDate end, PaymentMode mode, String paymentReference) {
+        return reservation(reservationId, propertyId, roomNumber, start, end, ReservationStatus.CONFIRMED, mode,
+                paymentReference);
+    }
+
+    private static Reservation reservation(String reservationId, String propertyId, String roomNumber, LocalDate start,
+            LocalDate end, ReservationStatus status, PaymentMode mode, @Nullable String paymentReference) {
         return Reservation.rehydrate(new ReservationState(
                 UUID.randomUUID(),
                 ReservationId.of(reservationId),
@@ -298,8 +363,8 @@ class ReservationPersistenceTest {
                 "Ada Lovelace",
                 new StayPeriod(start, end),
                 segmentOfSeededRoom(roomNumber),
-                PaymentMode.CASH,
-                null,
+                mode,
+                paymentReference,
                 status,
                 status == ReservationStatus.CANCELLED ? CancellationReason.PAYMENT_DEADLINE_MISSED : null,
                 Money.eur("240.00"),

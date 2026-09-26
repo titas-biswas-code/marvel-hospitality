@@ -2,6 +2,7 @@ package com.marvel.hospitality.reservation.domain;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -14,7 +15,7 @@ import org.jspecify.annotations.Nullable;
  * The reservation aggregate. The state machine (ADR-0004) is:
  * <pre>
  * (new)           -&gt; PENDING_PAYMENT   bank transfer created
- * (new)           -&gt; CONFIRMED         cash, or credit card confirmed (PR-03)
+ * (new)           -&gt; CONFIRMED         cash, or credit card confirmed
  * PENDING_PAYMENT -&gt; CONFIRMED         full amount received
  * PENDING_PAYMENT -&gt; CANCELLED         payment deadline missed
  * anything else   -&gt; IllegalStateTransitionException
@@ -90,10 +91,33 @@ public final class Reservation {
     }
 
     /**
-     * Creates a new reservation, running every creation-time rule in order: stay shape and "not in the past"
-     * ({@link StayPeriod#forNewBooking}), room belongs to the property, requested segment matches the room's
-     * actual segment, the handler is the one registered for the requested mode, then hands off to the
-     * {@link PaymentModeHandler} to decide the initial status (and, for bank transfer, the payment deadline).
+     * The creation-time rules that do not depend on the payment mode: stay shape and "not in the past"
+     * ({@link StayPeriod#forNewBooking}), room belongs to the property, requested segment matches the room's actual
+     * segment. {@link #create} runs them itself; the application layer also runs them <em>before</em> a remote
+     * payment check (ADR-0011), so a request that is bound to fail never reaches the payment service.
+     *
+     * @return the validated stay
+     */
+    public static StayPeriod checkCreatable(LocalDate startDate, LocalDate endDate, RoomSegment requestedSegment,
+            Property property, Room room, Clock clock) {
+        Objects.requireNonNull(property, "property");
+        Objects.requireNonNull(room, "room");
+        Objects.requireNonNull(clock, "clock");
+        StayPeriod stay = StayPeriod.forNewBooking(startDate, endDate, property.today(clock));
+        if (!room.propertyId().equals(property.id())) {
+            throw new IllegalArgumentException(
+                    "Room " + room.roomNumber() + " does not belong to property " + property.id());
+        }
+        if (requestedSegment != room.segment()) {
+            throw new RoomSegmentMismatchException(requestedSegment, room.segment());
+        }
+        return stay;
+    }
+
+    /**
+     * Creates a new reservation, running every creation-time rule in order: {@link #checkCreatable}, the handler is
+     * the one registered for the requested mode, then hands off to the {@link PaymentModeHandler} to decide the
+     * initial status (and, for bank transfer, the payment deadline).
      */
     public static Reservation create(
             NewReservation request, Property property, Room room, Money nightlyRate, PaymentModeHandler handler, Clock clock) {
@@ -104,14 +128,8 @@ public final class Reservation {
         Objects.requireNonNull(handler, "handler");
         Objects.requireNonNull(clock, "clock");
 
-        StayPeriod stay = StayPeriod.forNewBooking(request.startDate(), request.endDate(), property.today(clock));
-        if (!room.propertyId().equals(property.id())) {
-            throw new IllegalArgumentException(
-                    "Room " + room.roomNumber() + " does not belong to property " + property.id());
-        }
-        if (request.requestedSegment() != room.segment()) {
-            throw new RoomSegmentMismatchException(request.requestedSegment(), room.segment());
-        }
+        StayPeriod stay = checkCreatable(
+                request.startDate(), request.endDate(), request.requestedSegment(), property, room, clock);
         if (handler.mode() != request.paymentMode()) {
             throw new IllegalArgumentException(
                     "Handler for " + handler.mode() + " cannot handle requested mode " + request.paymentMode());

@@ -31,6 +31,9 @@ Rules:
 - `paymentReference` required for `CREDIT_CARD`; stored as-is for all modes.
 - `BANK_TRANSFER` and `paymentDeadlineAt <= now` → `422 BANK_TRANSFER_LEAD_TIME_TOO_SHORT`.
 - Room overlap → `409 ROOM_UNAVAILABLE`.
+- `CREDIT_CARD` with a `paymentReference` that already backs a reservation (any property) →
+  `409 PAYMENT_REFERENCE_ALREADY_USED` (nothing persisted; checked before calling the payment service, enforced by a
+  unique index). Cash and bank-transfer references may repeat.
 - Credit card `REJECTED` or `404` from payment service → `422 PAYMENT_REJECTED` (nothing persisted).
 - Credit card timeout / 5xx / circuit open → `503 PAYMENT_SERVICE_UNAVAILABLE`, `Retry-After: 5` (nothing persisted).
 
@@ -83,7 +86,7 @@ Values come from the Java enums via `Enum.values()` (single source of truth).
 Role `reservation:read`. Reconciliation view of payments with `UNMATCHED_*` outcome.
 
 Error codes: `VALIDATION_FAILED` 400, `ROOM_NOT_FOUND` 404, `RESERVATION_NOT_FOUND` 404,
-`PROPERTY_NOT_FOUND` 404, `ROOM_UNAVAILABLE` 409, `ROOM_SEGMENT_MISMATCH` 422,
+`PROPERTY_NOT_FOUND` 404, `ROOM_UNAVAILABLE` 409, `PAYMENT_REFERENCE_ALREADY_USED` 409, `ROOM_SEGMENT_MISMATCH` 422,
 `BANK_TRANSFER_LEAD_TIME_TOO_SHORT` 422, `PAYMENT_REJECTED` 422, `PAYMENT_SERVICE_UNAVAILABLE` 503,
 `UNAUTHENTICATED` 401, `FORBIDDEN` 403, `FORBIDDEN_PROPERTY` 403, `INTERNAL_ERROR` 500.
 

@@ -2,6 +2,7 @@ plugins {
     id 'java'
     id 'org.springframework.boot' version '4.1.1'
     id 'io.spring.dependency-management' version '1.1.7'
+    id 'org.openapi.generator' version '7.25.0'
 }
 
 group = 'com.marvel.hospitality'
@@ -21,6 +22,8 @@ repositories {
 ext {
     springdocVersion = '3.1.1'
     marvelPlatformVersion = '1.0.0'
+    resilience4jVersion = '2.4.0'
+    wiremockSpringBootVersion = '4.4.2'
 }
 
 dependencies {
@@ -30,6 +33,11 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-flyway'
     implementation 'org.springframework.boot:spring-boot-starter-kafka'
+    // Outbound HTTP to credit-card-payment-service: Boot 4 moved RestClient.Builder into its own starter.
+    implementation 'org.springframework.boot:spring-boot-starter-restclient'
+    // Retry + circuit breaker on the credit-card call (ADR-0011); the annotations need AspectJ (Boot 4 name of the AOP starter).
+    implementation "io.github.resilience4j:resilience4j-spring-boot4:${resilience4jVersion}"
+    implementation 'org.springframework.boot:spring-boot-starter-aspectj'
     // JWT resource server, role + property authorization, 401/403 ProblemDetail, /whoami (platform/security-starter).
     implementation "com.marvel.hospitality:marvel-security-spring-boot-starter:${marvelPlatformVersion}"
     // ProblemDetail fallback advice, VALIDATION_FAILED shape, constraint-name lookup (platform/problem-starter).
@@ -48,7 +56,40 @@ dependencies {
     testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
     testImplementation 'org.testcontainers:testcontainers-postgresql'
     testImplementation 'org.testcontainers:testcontainers-kafka'
+    testImplementation "org.wiremock.integrations:wiremock-spring-boot:${wiremockSpringBootVersion}"
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+// Client for credit-card-payment-service, generated at build time from the corrected contract (ADR-0011). The spec is
+// read straight from docs/contracts (one copy, no drift); generated sources live in build/ and are never committed.
+def creditCardGeneratedDir = layout.buildDirectory.dir('generated/openapi/credit-card')
+def creditCardPackage = 'com.marvel.hospitality.reservation.infrastructure.creditcard.generated'
+
+openApiGenerate {
+    generatorName = 'java'
+    library = 'restclient'
+    inputSpec = file('../docs/contracts/credit-card-payment-api.yaml').path
+    outputDir = creditCardGeneratedDir.get().asFile.path
+    apiPackage = "${creditCardPackage}.api"
+    modelPackage = "${creditCardPackage}.model"
+    invokerPackage = creditCardPackage
+    generateApiTests = false
+    generateModelTests = false
+    generateApiDocumentation = false
+    generateModelDocumentation = false
+    configOptions = [
+            useSpringBoot4        : 'true',
+            useJackson3           : 'true',
+            useJspecify           : 'true',
+            openApiNullable       : 'false',
+            hideGenerationTimestamp: 'true',
+            sourceFolder          : 'src/main/java',
+    ]
+}
+
+sourceSets.main.java.srcDir(creditCardGeneratedDir.map { it.dir('src/main/java') })
+tasks.named('compileJava') {
+    dependsOn tasks.named('openApiGenerate')
 }
 
 tasks.named('test') {

@@ -2,7 +2,9 @@ package com.marvel.hospitality.reservation.api;
 
 import com.marvel.hospitality.platform.problem.InvalidField;
 import com.marvel.hospitality.platform.problem.Problems;
-import com.marvel.hospitality.reservation.application.PaymentModeNotSupportedException;
+import com.marvel.hospitality.reservation.application.PaymentReferenceAlreadyUsedException;
+import com.marvel.hospitality.reservation.application.PaymentRejectedException;
+import com.marvel.hospitality.reservation.application.PaymentServiceUnavailableException;
 import com.marvel.hospitality.reservation.application.PropertyNotFoundException;
 import com.marvel.hospitality.reservation.application.ReservationNotFoundException;
 import com.marvel.hospitality.reservation.application.RoomNotFoundException;
@@ -12,10 +14,14 @@ import com.marvel.hospitality.reservation.domain.InvalidStayException;
 import com.marvel.hospitality.reservation.domain.RoomSegmentMismatchException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
+import java.time.Duration;
 import java.util.List;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.annotation.Order;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -43,6 +49,13 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 @Order(Problems.SERVICE_ADVICE_ORDER)
 class ReservationProblemAdvice {
+
+    private final Duration paymentServiceRetryAfter;
+
+    ReservationProblemAdvice(
+            @Value("${reservation.payment-service-unavailable.retry-after}") Duration paymentServiceRetryAfter) {
+        this.paymentServiceRetryAfter = paymentServiceRetryAfter;
+    }
 
     @ExceptionHandler(InvalidStayException.class)
     ProblemDetail handleInvalidStay(InvalidStayException ex, HttpServletRequest request) {
@@ -83,13 +96,25 @@ class ReservationProblemAdvice {
                 HttpStatus.UNPROCESSABLE_CONTENT, ProblemCodes.BANK_TRANSFER_LEAD_TIME_TOO_SHORT, ex.getMessage(), request);
     }
 
-    /**
-     * Temporary (PR-02 only): {@code CREDIT_CARD} has no {@link com.marvel.hospitality.reservation.domain.PaymentModeHandler}
-     * registered until PR-03 adds one; this handler and {@link ProblemCodes#NOT_IMPLEMENTED_YET} are removed then.
-     */
-    @ExceptionHandler(PaymentModeNotSupportedException.class)
-    ProblemDetail handlePaymentModeNotSupported(PaymentModeNotSupportedException ex, HttpServletRequest request) {
-        return problem(HttpStatus.NOT_IMPLEMENTED, ProblemCodes.NOT_IMPLEMENTED_YET, ex.getMessage(), request);
+    @ExceptionHandler(PaymentReferenceAlreadyUsedException.class)
+    ProblemDetail handlePaymentReferenceAlreadyUsed(PaymentReferenceAlreadyUsedException ex, HttpServletRequest request) {
+        return problem(HttpStatus.CONFLICT, ProblemCodes.PAYMENT_REFERENCE_ALREADY_USED, ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(PaymentRejectedException.class)
+    ProblemDetail handlePaymentRejected(PaymentRejectedException ex, HttpServletRequest request) {
+        return problem(HttpStatus.UNPROCESSABLE_CONTENT, ProblemCodes.PAYMENT_REJECTED, ex.getMessage(), request);
+    }
+
+    /** {@code Retry-After} in seconds (rest-api.md): nothing was persisted, and the same request is safe to repeat. */
+    @ExceptionHandler(PaymentServiceUnavailableException.class)
+    ResponseEntity<ProblemDetail> handlePaymentServiceUnavailable(
+            PaymentServiceUnavailableException ex, HttpServletRequest request) {
+        ProblemDetail problem = problem(
+                HttpStatus.SERVICE_UNAVAILABLE, ProblemCodes.PAYMENT_SERVICE_UNAVAILABLE, ex.getMessage(), request);
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .header(HttpHeaders.RETRY_AFTER, Long.toString(paymentServiceRetryAfter.toSeconds()))
+                .body(problem);
     }
 
     private static ProblemDetail problem(HttpStatus status, String code, String detail, HttpServletRequest request) {

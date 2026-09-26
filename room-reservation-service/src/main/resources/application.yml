@@ -43,6 +43,53 @@ reservation:
   id:
     # Reservation ids are 8 chars from a 32-symbol alphabet; a collision is rare but possible (contracts/identifiers.md).
     max-attempts: 5
+  payment-service-unavailable:
+    # Retry-After on 503 PAYMENT_SERVICE_UNAVAILABLE (rest-api.md); a bit longer than the circuit needs to probe again.
+    retry-after: 5s
+
+credit-card:
+  client:
+    # Spec base path included (docs/contracts/credit-card-payment-api.yaml, servers.url).
+    base-url: ${CREDIT_CARD_BASE_URL:http://localhost:9090/credit-card-payment-api}
+    # ADR-0011. Enforced by the HTTP client; the call is blocking, so no Resilience4j TimeLimiter.
+    connect-timeout: 1s
+    read-timeout: 2s
+
+# ADR-0011 resilience policy for the credit-card status call. Retry is the outer decorator, so each attempt counts in
+# the circuit breaker. 404 is not an exception here (the gateway turns it into NOT_FOUND); any other 4xx is never
+# retried and never opens the circuit, because it means our request was wrong, not that the service is unhealthy.
+resilience4j:
+  retry:
+    instances:
+      creditCardPayment:
+        max-attempts: 3            # 1 call + 2 retries
+        wait-duration: 200ms
+        retry-exceptions:
+          - org.springframework.web.client.HttpServerErrorException
+          - org.springframework.web.client.ResourceAccessException   # connect failure, read timeout
+        ignore-exceptions:
+          - org.springframework.web.client.HttpClientErrorException
+          - io.github.resilience4j.circuitbreaker.CallNotPermittedException
+  circuitbreaker:
+    instances:
+      creditCardPayment:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 20
+        # Explicit: Resilience4j's default (100) would exceed the window and delay opening.
+        minimum-number-of-calls: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+        record-exceptions:
+          - org.springframework.web.client.HttpServerErrorException
+          - org.springframework.web.client.ResourceAccessException
+        ignore-exceptions:
+          - org.springframework.web.client.HttpClientErrorException
+        register-health-indicator: true
+        # An open circuit reports CIRCUIT_OPEN, not DOWN: the payment service being away must not take this service
+        # out of rotation. It is also not part of the liveness/readiness groups the orchestrator probes.
+        allow-health-indicator-to-fail: false
 
 marvel:
   security:
@@ -55,7 +102,8 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        # metrics: Resilience4j's retry/circuit-breaker meters (resilience4j.*); Prometheus arrives in PR-10.
+        include: health,info,metrics
   endpoint:
     health:
       probes:
@@ -65,6 +113,8 @@ management:
     livenessstate:
       enabled: true
     readinessstate:
+      enabled: true
+    circuitbreakers:
       enabled: true
 
 springdoc:
@@ -90,6 +140,10 @@ spring:
 marvel:
   security:
     cors-allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:8088}
+
+credit-card:
+  client:
+    base-url: ${CREDIT_CARD_BASE_URL:http://credit-card-payment-service:9090/credit-card-payment-api}
 
 logging:
   structured:

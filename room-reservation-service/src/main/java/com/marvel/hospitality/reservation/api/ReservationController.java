@@ -6,6 +6,7 @@ import com.marvel.hospitality.reservation.application.ReservationView;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -48,22 +49,27 @@ class ReservationController {
     @PostMapping
     @PreAuthorize("hasAuthority('reservation:write') and @propertyAccess.allowed(#propertyId)")
     @Operation(summary = "Create a reservation",
-            description = "Creates a reservation and, depending on paymentMode, confirms it immediately (CASH) or "
-                    + "puts it in PENDING_PAYMENT with a bank-transfer deadline (BANK_TRANSFER). CREDIT_CARD "
-                    + "returns 501 in this release (PR-03 adds it).")
+            description = "Creates a reservation and, depending on paymentMode, confirms it immediately (CASH), "
+                    + "puts it in PENDING_PAYMENT with a bank-transfer deadline (BANK_TRANSFER), or checks "
+                    + "paymentReference with the credit-card payment service and confirms it (CREDIT_CARD; "
+                    + "paymentReference required). A rejected or unknown card payment is 422 and an unreachable "
+                    + "payment service is 503 with Retry-After; in both cases nothing is stored.")
     @RequestBody(required = true, content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
             schema = @Schema(implementation = CreateReservationRequest.class),
             examples = {
                     @ExampleObject(name = "Bank transfer", value = ReservationApiExamples.CREATE_BANK_TRANSFER_REQUEST),
-                    @ExampleObject(name = "Cash", value = ReservationApiExamples.CREATE_CASH_REQUEST)}))
+                    @ExampleObject(name = "Cash", value = ReservationApiExamples.CREATE_CASH_REQUEST),
+                    @ExampleObject(name = "Credit card", value = ReservationApiExamples.CREATE_CREDIT_CARD_REQUEST)}))
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Created",
                     content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
                             schema = @Schema(implementation = ReservationResponse.class),
                             examples = {
                                     @ExampleObject(name = "Bank transfer", value = ReservationApiExamples.BANK_TRANSFER_RESPONSE),
-                                    @ExampleObject(name = "Cash", value = ReservationApiExamples.CASH_RESPONSE)})),
-            @ApiResponse(responseCode = "400", description = "VALIDATION_FAILED: bad request shape or an invalid stay",
+                                    @ExampleObject(name = "Cash", value = ReservationApiExamples.CASH_RESPONSE),
+                                    @ExampleObject(name = "Credit card", value = ReservationApiExamples.CREDIT_CARD_RESPONSE)})),
+            @ApiResponse(responseCode = "400",
+                    description = "VALIDATION_FAILED: bad request shape, an invalid stay, or CREDIT_CARD without paymentReference",
                     content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
                             schema = @Schema(implementation = ProblemDetail.class),
                             examples = @ExampleObject(value = ReservationApiExamples.VALIDATION_FAILED_EXAMPLE))),
@@ -83,21 +89,30 @@ class ReservationController {
                             examples = {
                                     @ExampleObject(name = "PROPERTY_NOT_FOUND", value = ReservationApiExamples.PROPERTY_NOT_FOUND_EXAMPLE),
                                     @ExampleObject(name = "ROOM_NOT_FOUND", value = ReservationApiExamples.ROOM_NOT_FOUND_EXAMPLE)})),
-            @ApiResponse(responseCode = "409", description = "ROOM_UNAVAILABLE",
+            @ApiResponse(responseCode = "409",
+                    description = "ROOM_UNAVAILABLE, or PAYMENT_REFERENCE_ALREADY_USED (card payment already backs a reservation)",
                     content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
                             schema = @Schema(implementation = ProblemDetail.class),
-                            examples = @ExampleObject(value = ReservationApiExamples.ROOM_UNAVAILABLE_EXAMPLE))),
-            @ApiResponse(responseCode = "422", description = "ROOM_SEGMENT_MISMATCH or BANK_TRANSFER_LEAD_TIME_TOO_SHORT",
+                            examples = {
+                                    @ExampleObject(name = "ROOM_UNAVAILABLE", value = ReservationApiExamples.ROOM_UNAVAILABLE_EXAMPLE),
+                                    @ExampleObject(name = "PAYMENT_REFERENCE_ALREADY_USED",
+                                            value = ReservationApiExamples.PAYMENT_REFERENCE_ALREADY_USED_EXAMPLE)})),
+            @ApiResponse(responseCode = "422",
+                    description = "ROOM_SEGMENT_MISMATCH, BANK_TRANSFER_LEAD_TIME_TOO_SHORT or PAYMENT_REJECTED (card payment rejected or unknown)",
                     content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
                             schema = @Schema(implementation = ProblemDetail.class),
                             examples = {
                                     @ExampleObject(name = "ROOM_SEGMENT_MISMATCH", value = ReservationApiExamples.ROOM_SEGMENT_MISMATCH_EXAMPLE),
                                     @ExampleObject(name = "BANK_TRANSFER_LEAD_TIME_TOO_SHORT",
-                                            value = ReservationApiExamples.BANK_TRANSFER_LEAD_TIME_TOO_SHORT_EXAMPLE)})),
-            @ApiResponse(responseCode = "501", description = "NOT_IMPLEMENTED_YET: paymentMode CREDIT_CARD (removed in PR-03)",
+                                            value = ReservationApiExamples.BANK_TRANSFER_LEAD_TIME_TOO_SHORT_EXAMPLE),
+                                    @ExampleObject(name = "PAYMENT_REJECTED", value = ReservationApiExamples.PAYMENT_REJECTED_EXAMPLE)})),
+            @ApiResponse(responseCode = "503",
+                    description = "PAYMENT_SERVICE_UNAVAILABLE: credit-card payment service timed out, failed or circuit open; see Retry-After",
+                    headers = @Header(name = "Retry-After", description = "Seconds to wait before retrying",
+                            schema = @Schema(type = "integer", example = "5")),
                     content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
                             schema = @Schema(implementation = ProblemDetail.class),
-                            examples = @ExampleObject(value = ReservationApiExamples.NOT_IMPLEMENTED_YET_EXAMPLE)))})
+                            examples = @ExampleObject(value = ReservationApiExamples.PAYMENT_SERVICE_UNAVAILABLE_EXAMPLE)))})
     ResponseEntity<ReservationResponse> create(
             @Parameter(in = ParameterIn.PATH, example = "AMS01") @PathVariable String propertyId,
             @Valid @org.springframework.web.bind.annotation.RequestBody CreateReservationRequest request) {

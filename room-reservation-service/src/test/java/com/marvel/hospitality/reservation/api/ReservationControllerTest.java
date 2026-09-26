@@ -6,13 +6,17 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.marvel.hospitality.reservation.MockJwtDecoderConfiguration;
 import com.marvel.hospitality.reservation.application.CreateReservationUseCase;
 import com.marvel.hospitality.reservation.application.GetReservationUseCase;
-import com.marvel.hospitality.reservation.application.PaymentModeNotSupportedException;
+import com.marvel.hospitality.reservation.application.CreditCardPaymentStatus;
+import com.marvel.hospitality.reservation.application.PaymentReferenceAlreadyUsedException;
+import com.marvel.hospitality.reservation.application.PaymentRejectedException;
+import com.marvel.hospitality.reservation.application.PaymentServiceUnavailableException;
 import com.marvel.hospitality.reservation.application.PropertyNotFoundException;
 import com.marvel.hospitality.reservation.application.ReservationNotFoundException;
 import com.marvel.hospitality.reservation.application.ReservationView;
@@ -57,6 +61,7 @@ import org.springframework.test.web.servlet.MvcResult;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
  * Web-layer slice test: real domain objects ({@link Reservation}, built exactly as {@code ReservationTest} builds
@@ -324,18 +329,61 @@ class ReservationControllerTest {
         return contains(Arrays.stream(values).map(Enum::name).toArray(String[]::new));
     }
 
-    @Test
-    void returns501ForCreditCardInThisRelease() throws Exception {
-        given(createReservationUseCase.create(any())).willThrow(new PaymentModeNotSupportedException(PaymentMode.CREDIT_CARD));
+    private static String creditCardRequestJson(String paymentReferenceJson) {
+        return validCashRequestJson().replace("\"CASH\"", "\"CREDIT_CARD\", \"paymentReference\": " + paymentReferenceJson);
+    }
 
-        String creditCardJson = validCashRequestJson().replace("\"CASH\"", "\"CREDIT_CARD\"");
+    @Test
+    void returns422PaymentRejectedWhenCardPaymentIsRejected() throws Exception {
+        given(createReservationUseCase.create(any()))
+                .willThrow(new PaymentRejectedException("REJ-1", CreditCardPaymentStatus.REJECTED));
 
         mvc.perform(post("/properties/AMS01/reservations").with(writeJwt())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(creditCardJson))
-                .andExpect(status().isNotImplemented())
-                .andExpect(jsonPath("$.code").value("NOT_IMPLEMENTED_YET"))
-                .andExpect(jsonPath("$.type").value("https://marvel-hospitality/problems/NOT_IMPLEMENTED_YET"));
+                        .content(creditCardRequestJson("\"REJ-1\"")))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.code").value("PAYMENT_REJECTED"))
+                .andExpect(jsonPath("$.type").value("https://marvel-hospitality/problems/PAYMENT_REJECTED"));
+    }
+
+    @Test
+    void returns409WhenPaymentReferenceAlreadyUsed() throws Exception {
+        given(createReservationUseCase.create(any()))
+                .willThrow(new PaymentReferenceAlreadyUsedException(PaymentMode.CREDIT_CARD, "OK-123"));
+
+        mvc.perform(post("/properties/AMS01/reservations").with(writeJwt())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(creditCardRequestJson("\"OK-123\"")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("PAYMENT_REFERENCE_ALREADY_USED"))
+                .andExpect(jsonPath("$.type").value("https://marvel-hospitality/problems/PAYMENT_REFERENCE_ALREADY_USED"));
+    }
+
+    @Test
+    void returns503WithRetryAfterWhenPaymentServiceUnavailable() throws Exception {
+        given(createReservationUseCase.create(any()))
+                .willThrow(new PaymentServiceUnavailableException("down", new RuntimeException("timeout")));
+
+        mvc.perform(post("/properties/AMS01/reservations").with(writeJwt())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(creditCardRequestJson("\"OK-123\"")))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(header().string("Retry-After", "5"))
+                .andExpect(jsonPath("$.code").value("PAYMENT_SERVICE_UNAVAILABLE"))
+                .andExpect(jsonPath("$.type").value("https://marvel-hospitality/problems/PAYMENT_SERVICE_UNAVAILABLE"));
+    }
+
+    @Test
+    void returns400WhenCreditCardHasNoPaymentReference() throws Exception {
+        for (String reference : List.of("null", "\"   \"")) {
+            mvc.perform(post("/properties/AMS01/reservations").with(writeJwt())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(creditCardRequestJson(reference)))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                    .andExpect(jsonPath("$.errors[0].field").value("paymentReference"));
+        }
+        verifyNoInteractions(createReservationUseCase);
     }
 
     @Test
