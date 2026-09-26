@@ -611,6 +611,37 @@
               "response": []
             },
             {
+              "name": "List payments of a reservation",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{reservation_url}}/properties/AMS01/reservations/{{reservationId}}/payments",
+                  "host": ["{{reservation_url}}"],
+                  "path": ["properties", "AMS01", "reservations", "{{reservationId}}", "payments"]
+                },
+                "description": "received_payment rows matched to this reservation (ADR-0009). reservation:read + property AMS01."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "pm.test(\"body is an array\", function () {",
+                      "    pm.expect(pm.response.json()).to.be.an(\"array\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "response": []
+            },
+            {
               "name": "Reference data (public)",
               "request": {
                 "auth": {
@@ -643,6 +674,73 @@
                       "",
                       "pm.test(\"paymentModes is an array\", function () {",
                       "    pm.expect(json.paymentModes).to.be.an(\"array\").that.is.not.empty;",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Unmatched payments",
+          "item": [
+            {
+              "name": "List a property's not-pending unmatched payments",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{reservation_url}}/properties/AMS01/unmatched-payments",
+                  "host": ["{{reservation_url}}"],
+                  "path": ["properties", "AMS01", "unmatched-payments"]
+                },
+                "description": "UNMATCHED_NOT_PENDING payments for AMS01: paid after the reservation was cancelled or already confirmed. Refunded automatically (ADR-0009); this is the staff follow-up view. reservation:read + property AMS01."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "pm.test(\"body is an array\", function () {",
+                      "    pm.expect(pm.response.json()).to.be.an(\"array\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "response": []
+            },
+            {
+              "name": "List payments with no reservation match (bank-wide)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{reservation_url}}/unmatched-payments",
+                  "host": ["{{reservation_url}}"],
+                  "path": ["unmatched-payments"]
+                },
+                "description": "UNMATCHED_FORMAT and UNMATCHED_UNKNOWN_RESERVATION payments: no reservation could be found at all, so there is no property to check. Guarded by bank:read instead (ADR-0009); alice and bob both hold it."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "pm.test(\"body is an array\", function () {",
+                      "    pm.expect(pm.response.json()).to.be.an(\"array\");",
                       "});"
                     ]
                   }

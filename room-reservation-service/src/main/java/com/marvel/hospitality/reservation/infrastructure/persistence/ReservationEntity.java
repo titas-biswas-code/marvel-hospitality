@@ -13,6 +13,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
+import jakarta.persistence.OptimisticLockException;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.math.BigDecimal;
@@ -175,6 +176,27 @@ class ReservationEntity {
                 state.version(),
                 state.createdAt(),
                 state.updatedAt());
+    }
+
+    /**
+     * Copies the fields a reservation can change after creation (status, cancellation reason, amount received,
+     * updated-at) onto this managed row. Everything else is immutable once booked. The snapshot must come from this
+     * row's current version; Hibernate then increments {@code version} on flush.
+     *
+     * @throws OptimisticLockException the snapshot was taken from an older version of the row
+     */
+    void applyChanges(ReservationState state) {
+        if (!id.equals(state.id())) {
+            throw new IllegalArgumentException("Snapshot of reservation " + state.id() + " applied to row " + id);
+        }
+        if (version != state.version()) {
+            throw new OptimisticLockException("Reservation " + reservationId + " changed since it was loaded: version "
+                    + state.version() + " vs " + version);
+        }
+        this.status = state.status();
+        this.cancellationReason = state.cancellationReason();
+        this.amountReceived = state.amountReceived().amount();
+        this.updatedAt = state.updatedAt();
     }
 
     /** Maps this row back to a {@link ReservationState}, the shape {@link com.marvel.hospitality.reservation.domain.Reservation#rehydrate} accepts. */

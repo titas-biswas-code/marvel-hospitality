@@ -218,16 +218,98 @@ class ReservationTest {
     }
 
     @Test
-    void recordPaymentAccumulatesAmountReceivedWithoutChangingStatus() {
+    void partialPaymentKeepsStatusAndEmitsPartialPaymentEvent() {
         Reservation reservation = createPending();
         reservation.pullEvents();
 
-        reservation.recordPayment(Money.eur("100.00"), CLOCK);
-        reservation.recordPayment(Money.eur("40.00"), CLOCK);
+        reservation.recordPartialPayment(Money.eur("100.00"), CLOCK);
+
+        assertThat(reservation.amountReceived()).isEqualTo(Money.eur("100.00"));
+        assertThat(reservation.status()).isEqualTo(ReservationStatus.PENDING_PAYMENT);
+        assertThat(reservation.pullEvents()).singleElement().satisfies(event -> {
+            assertThat(event.previousStatus()).isEqualTo(ReservationStatus.PENDING_PAYMENT);
+            assertThat(event.status()).isEqualTo(ReservationStatus.PENDING_PAYMENT);
+            assertThat(event.reason()).isEqualTo(StatusChangeReason.PARTIAL_PAYMENT_RECEIVED);
+            assertThat(event.amountReceived()).isEqualTo(Money.eur("100.00"));
+        });
+
+        reservation.recordPartialPayment(Money.eur("140.00"), CLOCK);
 
         assertThat(reservation.amountReceived()).isEqualTo(Money.eur("140.00"));
         assertThat(reservation.status()).isEqualTo(ReservationStatus.PENDING_PAYMENT);
-        assertThat(reservation.pullEvents()).isEmpty();
+    }
+
+    @Test
+    void confirmPaymentConfirmsAndEventCarriesNewAmountReceived() {
+        Reservation reservation = createPending();
+        reservation.pullEvents();
+
+        reservation.confirmPayment(Money.eur("240.00"), CLOCK);
+
+        assertThat(reservation.status()).isEqualTo(ReservationStatus.CONFIRMED);
+        assertThat(reservation.amountReceived()).isEqualTo(Money.eur("240.00"));
+        assertThat(reservation.pullEvents()).singleElement().satisfies(event -> {
+            assertThat(event.previousStatus()).isEqualTo(ReservationStatus.PENDING_PAYMENT);
+            assertThat(event.status()).isEqualTo(ReservationStatus.CONFIRMED);
+            assertThat(event.reason()).isEqualTo(StatusChangeReason.PAYMENT_RECEIVED);
+            assertThat(event.amountReceived()).isEqualTo(Money.eur("240.00"));
+        });
+    }
+
+    @Test
+    void confirmPaymentAcceptsAnOverpaidAmount() {
+        Reservation reservation = createPending();
+        reservation.pullEvents();
+
+        reservation.confirmPayment(Money.eur("250.00"), CLOCK);
+
+        assertThat(reservation.status()).isEqualTo(ReservationStatus.CONFIRMED);
+        assertThat(reservation.amountReceived()).isEqualTo(Money.eur("250.00"));
+    }
+
+    @Test
+    void partialPaymentRejectsAmountAtOrAboveTotal() {
+        Reservation reservation = createPending();
+
+        assertThatThrownBy(() -> reservation.recordPartialPayment(Money.eur("240.00"), CLOCK))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> reservation.recordPartialPayment(Money.eur("250.00"), CLOCK))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> reservation.recordPartialPayment(Money.zeroEur(), CLOCK))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void confirmPaymentRejectsAmountBelowTotal() {
+        Reservation reservation = createPending();
+
+        assertThatThrownBy(() -> reservation.confirmPayment(Money.eur("239.99"), CLOCK))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void paymentsAreRejectedUnlessPendingPayment() {
+        Reservation confirmed = createCash();
+        Instant updatedAtBefore = confirmed.updatedAt();
+
+        assertThatThrownBy(() -> confirmed.recordPartialPayment(Money.eur("10.00"), CLOCK))
+                .isInstanceOf(IllegalStateTransitionException.class);
+        assertThatThrownBy(() -> confirmed.confirmPayment(Money.eur("240.00"), CLOCK))
+                .isInstanceOf(IllegalStateTransitionException.class);
+        assertThat(confirmed.status()).isEqualTo(ReservationStatus.CONFIRMED);
+        assertThat(confirmed.amountReceived()).isEqualTo(Money.zeroEur());
+        assertThat(confirmed.updatedAt()).isEqualTo(updatedAtBefore);
+
+        Reservation cancelled = createPending();
+        cancelled.cancel(CancellationReason.PAYMENT_DEADLINE_MISSED, CLOCK);
+        cancelled.pullEvents();
+
+        assertThatThrownBy(() -> cancelled.recordPartialPayment(Money.eur("10.00"), CLOCK))
+                .isInstanceOf(IllegalStateTransitionException.class);
+        assertThatThrownBy(() -> cancelled.confirmPayment(Money.eur("240.00"), CLOCK))
+                .isInstanceOf(IllegalStateTransitionException.class);
+        assertThat(cancelled.amountReceived()).isEqualTo(Money.zeroEur());
+        assertThat(cancelled.pullEvents()).isEmpty();
     }
 
     @Test
@@ -248,7 +330,7 @@ class ReservationTest {
     @Test
     void rehydratedReservationRoundTripsItsState() {
         Reservation original = createPending();
-        original.recordPayment(Money.eur("50.00"), CLOCK);
+        original.recordPartialPayment(Money.eur("50.00"), CLOCK);
         ReservationState state = original.snapshot();
 
         Reservation rehydrated = Reservation.rehydrate(state);

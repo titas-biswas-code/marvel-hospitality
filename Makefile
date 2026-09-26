@@ -10,10 +10,10 @@ TOKEN_USER := $(if $(filter command line,$(origin USER)),$(USER),alice)
 PASSWORD   ?= password
 CLIENT     ?= bank-simulator
 
-.PHONY: help build-all test-all check-contracts up up-apps down logs reset token client-token
+.PHONY: help build-all test-all check-contracts up up-apps down logs reset token client-token replay-dlt
 
 help:
-	@echo "build-all | test-all | check-contracts | up | up-apps | down | logs | reset | token USER=alice | client-token CLIENT=bank-simulator"
+	@echo "build-all | test-all | check-contracts | up | up-apps | down | logs | reset | token USER=alice | client-token CLIENT=bank-simulator | replay-dlt TOPIC=bank-transfer-payment-update [MAX=N] [DRY_RUN=1]"
 
 # The credit-card spec exists twice on purpose: the provider's copy (served by the stub) and the consumer's copy (the
 # reservation service generates its client from it). Each service builds from its own file; this keeps them identical.
@@ -64,3 +64,8 @@ client-token: $(ENV_FILE)
 	@secret=$$(grep -E "^$$(echo $(CLIENT) | tr 'a-z-' 'A-Z_')_CLIENT_SECRET=" $(ENV_FILE) | cut -d= -f2-); \
 	  curl -sf -X POST $(KEYCLOAK) -d grant_type=client_credentials -d client_id=$(CLIENT) \
 	  -d client_secret=$$secret | jq -r .access_token
+
+# Replays dead-lettered records from <topic>.DLT back onto <topic> (ADR-0008's manual DLT tool).
+replay-dlt:
+	@if [ -z "$(TOPIC)" ]; then echo "usage: make replay-dlt TOPIC=<topic> [MAX=N] [DRY_RUN=1]" >&2; exit 1; fi
+	./scripts/replay-dlt.sh $(TOPIC) $(if $(MAX),--max $(MAX)) $(if $(DRY_RUN),--dry-run)

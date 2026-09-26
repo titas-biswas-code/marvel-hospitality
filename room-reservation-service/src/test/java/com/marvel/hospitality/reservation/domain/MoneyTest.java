@@ -34,4 +34,12 @@ class MoneyTest {
     void multipliesByNights() {
         assertThat(Money.eur("120.00").times(2)).isEqualTo(Money.eur("240.00"));
     }
+
+    @Test
+    void subtractsWithinBalanceButRejectsGoingNegative() {
+        assertThat(Money.eur("240.00").minus(Money.eur("240.00"))).isEqualTo(Money.zeroEur());
+        assertThat(Money.eur("250.00").minus(Money.eur("240.00"))).isEqualTo(Money.eur("10.00"));
+        assertThatThrownBy(() -> Money.eur("100.00").minus(Money.eur("100.01")))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
 }

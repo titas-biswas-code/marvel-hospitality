@@ -31,9 +31,12 @@ and a debtor account. The brief says "total amount not received" implies partial
 ## Consequences
 - The reservation service needs only `paymentId`, amount, description; it never calls the payment service.
 - `amountReceived` on the reservation is denormalised for the API and for the scheduler; the source of
-  truth is `sum(received_payment.amount)`, recomputed inside the same transaction.
-- Concurrent payments for one reservation are serialised by the `@Version` on the reservation row and
-  the per-key ordering on the topic.
+  truth is `sum(received_payment.amount)` over the reservation's matched payments, recomputed inside the same
+  transaction. `UNMATCHED_NOT_PENDING` payments are refunded, so they never count.
+- Concurrent payments for one reservation are serialised by a row lock: the consumer loads the reservation
+  `SELECT ... FOR UPDATE` before summing. Topic ordering does not help here: the bank topic is keyed by `paymentId`,
+  so two payments for one reservation can sit on different partitions and be consumed at the same time. The
+  `@Version` column stays as a second line of defence; a conflict it detects is a retryable failure (ADR-0008).
 
 ## Alternatives considered
 - Fuzzy matching (case-insensitive, whitespace-tolerant, Levenshtein): tempting, but a wrong match

@@ -14,7 +14,8 @@ Local environment (Postgres, Kafka, Debezium, Keycloak, Grafana): see `infra/REA
 | Reservations: create `CASH` (→ `CONFIRMED`) and `BANK_TRANSFER` (→ `PENDING_PAYMENT` with a payment deadline), get by id, `/reference-data`; overbooking prevented by a Postgres exclusion constraint (ADR-0005); an outbox row for every status change (ADR-0006) | done |
 | Credit card: `CREDIT_CARD` reservations checked synchronously against `credit-card-payment-service` (a stub of the provided spec) through a client generated from the corrected spec, with timeouts, retry and circuit breaker (ADR-0011) | done |
 | Bank payments: `bank-transfer-payment-service` ledger with idempotent `POST /bank-transactions`; its outbox and the reservation outbox published to Kafka by Debezium (ADR-0007, ADR-0014); bank simulator scripts | done |
-| Payment matching (reservation service consumes the bank topic), auto-cancel, refunds, notifications, observability | next |
+| Payment matching: the reservation service consumes the bank topic idempotently; partial payments add up, the full amount confirms, every payment is stored with its outcome (ADR-0009). Technical failures are retried, then dead-lettered to `<topic>.DLT` (ADR-0008); watch `kafka.dlt.messages` and replay with `make replay-dlt TOPIC=…`. Payments that name no known reservation are **not** refunded automatically: they wait in `GET /unmatched-payments` so a typo can still be reconciled by a person | done |
+| Auto-cancel, refunds, notifications, observability | next |
 
 Try it: `make up-apps`, then Swagger UI at http://localhost:8080/swagger-ui.html (or the unified one at
 http://localhost:8088), or the Postman collection in `docs/postman/` (Auth folder for a token, then "Reservations" / "Bank transactions").

@@ -27,6 +27,15 @@ spring:
     admin:
       # Topics are created by infra/kafka-init, never by the application (contracts/events.md).
       auto-create: false
+    consumer:
+      # Consumer group = service name (events.md); also the inbox's consumer name.
+      group-id: ${spring.application.name}
+      # A new group starts from the oldest record: a payment published before the first start must not be skipped.
+      auto-offset-reset: earliest
+    listener:
+      # One consumer thread per partition (3, infra/kafka/create-topics.sh). Ack mode, deserializers, retries and
+      # the DLT come from platform/kafka-starter (ADR-0008).
+      concurrency: 3
   security:
     oauth2:
       resourceserver:
@@ -155,3 +164,17 @@ spring:
   config:
     activate:
       on-profile: test
+  kafka:
+    # Nothing listens here: a test context without the Kafka test container must never reach a developer's
+    # compose broker on localhost:9094. The Kafka integration test's @ServiceConnection overrides this.
+    bootstrap-servers: localhost:1
+    listener:
+      # Only the Kafka integration tests start listeners (and bring a broker); other contexts never connect.
+      auto-startup: false
+
+marvel:
+  kafka:
+    retry:
+      # Same number of attempts as production, millisecond waits so retry tests stay fast.
+      initial-interval: 10ms
+      max-interval: 40ms
