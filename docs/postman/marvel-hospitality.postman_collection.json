@@ -36,16 +36,40 @@
             "body": {
               "mode": "urlencoded",
               "urlencoded": [
-                { "key": "grant_type", "value": "password", "type": "text" },
-                { "key": "client_id", "value": "marvel-postman", "type": "text" },
-                { "key": "username", "value": "alice", "type": "text" },
-                { "key": "password", "value": "{{password}}", "type": "text" }
+                {
+                  "key": "grant_type",
+                  "value": "password",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "marvel-postman",
+                  "type": "text"
+                },
+                {
+                  "key": "username",
+                  "value": "alice",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "{{password}}",
+                  "type": "text"
+                }
               ]
             },
             "url": {
               "raw": "{{keycloak_url}}/realms/marvel/protocol/openid-connect/token",
-              "host": ["{{keycloak_url}}"],
-              "path": ["realms", "marvel", "protocol", "openid-connect", "token"]
+              "host": [
+                "{{keycloak_url}}"
+              ],
+              "path": [
+                "realms",
+                "marvel",
+                "protocol",
+                "openid-connect",
+                "token"
+              ]
             },
             "description": "Password grant for dev user alice (reservation:read, reservation:write; properties AMS01, RTM01). Stores access_token in the environment."
           },
@@ -88,16 +112,40 @@
             "body": {
               "mode": "urlencoded",
               "urlencoded": [
-                { "key": "grant_type", "value": "password", "type": "text" },
-                { "key": "client_id", "value": "marvel-postman", "type": "text" },
-                { "key": "username", "value": "bob", "type": "text" },
-                { "key": "password", "value": "{{password}}", "type": "text" }
+                {
+                  "key": "grant_type",
+                  "value": "password",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "marvel-postman",
+                  "type": "text"
+                },
+                {
+                  "key": "username",
+                  "value": "bob",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "{{password}}",
+                  "type": "text"
+                }
               ]
             },
             "url": {
               "raw": "{{keycloak_url}}/realms/marvel/protocol/openid-connect/token",
-              "host": ["{{keycloak_url}}"],
-              "path": ["realms", "marvel", "protocol", "openid-connect", "token"]
+              "host": [
+                "{{keycloak_url}}"
+              ],
+              "path": [
+                "realms",
+                "marvel",
+                "protocol",
+                "openid-connect",
+                "token"
+              ]
             },
             "description": "Password grant for dev user bob (reservation:read, reservation:write; property AMS01 only). Stores access_token in the environment."
           },
@@ -140,16 +188,40 @@
             "body": {
               "mode": "urlencoded",
               "urlencoded": [
-                { "key": "grant_type", "value": "password", "type": "text" },
-                { "key": "client_id", "value": "marvel-postman", "type": "text" },
-                { "key": "username", "value": "carol", "type": "text" },
-                { "key": "password", "value": "{{password}}", "type": "text" }
+                {
+                  "key": "grant_type",
+                  "value": "password",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "marvel-postman",
+                  "type": "text"
+                },
+                {
+                  "key": "username",
+                  "value": "carol",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "{{password}}",
+                  "type": "text"
+                }
               ]
             },
             "url": {
               "raw": "{{keycloak_url}}/realms/marvel/protocol/openid-connect/token",
-              "host": ["{{keycloak_url}}"],
-              "path": ["realms", "marvel", "protocol", "openid-connect", "token"]
+              "host": [
+                "{{keycloak_url}}"
+              ],
+              "path": [
+                "realms",
+                "marvel",
+                "protocol",
+                "openid-connect",
+                "token"
+              ]
             },
             "description": "Password grant for dev user carol (reservation:read only; property RTM01). Stores access_token in the environment."
           },
@@ -192,15 +264,35 @@
             "body": {
               "mode": "urlencoded",
               "urlencoded": [
-                { "key": "grant_type", "value": "client_credentials", "type": "text" },
-                { "key": "client_id", "value": "bank-simulator", "type": "text" },
-                { "key": "client_secret", "value": "{{bank_simulator_client_secret}}", "type": "text" }
+                {
+                  "key": "grant_type",
+                  "value": "client_credentials",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "bank-simulator",
+                  "type": "text"
+                },
+                {
+                  "key": "client_secret",
+                  "value": "{{bank_simulator_client_secret}}",
+                  "type": "text"
+                }
               ]
             },
             "url": {
               "raw": "{{keycloak_url}}/realms/marvel/protocol/openid-connect/token",
-              "host": ["{{keycloak_url}}"],
-              "path": ["realms", "marvel", "protocol", "openid-connect", "token"]
+              "host": [
+                "{{keycloak_url}}"
+              ],
+              "path": [
+                "realms",
+                "marvel",
+                "protocol",
+                "openid-connect",
+                "token"
+              ]
             },
             "description": "Client-credentials grant for the bank-simulator service account (role bank:ingest; properties [\"*\"]). Stores access_token in the environment."
           },
@@ -230,6 +322,675 @@
       ]
     },
     {
+      "name": "Demo: bank transfer paid in two parts",
+      "description": "Run this folder with the Collection Runner (top to bottom). alice books a bank-transfer stay; the bank pays half (still PENDING_PAYMENT, amountReceived 120.00), then the rest (CONFIRMED, 240.00). Token requests are included so the runner switches between alice and the bank-simulator by itself.",
+      "item": [
+        {
+          "name": "1. Get token (alice)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "password",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "marvel-postman",
+                  "type": "text"
+                },
+                {
+                  "key": "username",
+                  "value": "alice",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "{{password}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{keycloak_url}}/realms/marvel/protocol/openid-connect/token",
+              "host": [
+                "{{keycloak_url}}"
+              ],
+              "path": [
+                "realms",
+                "marvel",
+                "protocol",
+                "openid-connect",
+                "token"
+              ]
+            },
+            "description": "Password grant for dev user alice (reservation:read, reservation:write; properties AMS01, RTM01). Stores access_token in the environment."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "",
+                  "pm.test(\"Response has access_token\", function () {",
+                  "    pm.expect(json.access_token).to.be.a(\"string\").and.not.empty;",
+                  "});",
+                  "",
+                  "pm.environment.set(\"access_token\", json.access_token);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "2. Create bank-transfer reservation (240.00)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{reservation_url}}/properties/AMS01/reservations",
+              "host": [
+                "{{reservation_url}}"
+              ],
+              "path": [
+                "properties",
+                "AMS01",
+                "reservations"
+              ]
+            },
+            "description": "Room 202 (MEDIUM, 120.00/night), 2 nights = 240.00, paid by bank transfer.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerName\": \"Ada Lovelace\",\n  \"roomNumber\": \"202\",\n  \"startDate\": \"{{demo_start}}\",\n  \"endDate\": \"{{demo_end}}\",\n  \"roomSegment\": \"MEDIUM\",\n  \"paymentMode\": \"BANK_TRANSFER\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// A random 2-night stay between 2030 and 2039, so the folder can be run again without 409 ROOM_UNAVAILABLE.",
+                  "const start = new Date(Date.UTC(2030, 0, 1) + Math.floor(Math.random() * 3650) * 86400000);",
+                  "const end = new Date(start.getTime() + 2 * 86400000);",
+                  "pm.environment.set(\"demo_start\", start.toISOString().slice(0, 10));",
+                  "pm.environment.set(\"demo_end\", end.toISOString().slice(0, 10));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 201\", () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"PENDING_PAYMENT, total 240.00\", () => {",
+                  "    pm.expect(json.status).to.eql(\"PENDING_PAYMENT\");",
+                  "    pm.expect(Number(json.totalAmount).toFixed(2)).to.eql(\"240.00\");",
+                  "});",
+                  "pm.environment.set(\"reservationId\", json.reservationId);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "3. Get token (bank-simulator)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "client_credentials",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "bank-simulator",
+                  "type": "text"
+                },
+                {
+                  "key": "client_secret",
+                  "value": "{{bank_simulator_client_secret}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{keycloak_url}}/realms/marvel/protocol/openid-connect/token",
+              "host": [
+                "{{keycloak_url}}"
+              ],
+              "path": [
+                "realms",
+                "marvel",
+                "protocol",
+                "openid-connect",
+                "token"
+              ]
+            },
+            "description": "Client-credentials grant for the bank-simulator service account (role bank:ingest; properties [\"*\"]). Stores access_token in the environment."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "",
+                  "pm.test(\"Response has access_token\", function () {",
+                  "    pm.expect(json.access_token).to.be.a(\"string\").and.not.empty;",
+                  "});",
+                  "",
+                  "pm.environment.set(\"access_token\", json.access_token);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "4. Bank pays 120.00",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{payment_url}}/bank-transactions",
+              "host": [
+                "{{payment_url}}"
+              ],
+              "path": [
+                "bank-transactions"
+              ]
+            },
+            "description": "The bank (bank-simulator token) reports 120.00 for the reservation created above; the remittance names it.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bankTransactionRef\": \"{{demo_tx_ref}}\",\n  \"debtorAccountNumber\": \"NL91ABNA0417164300\",\n  \"debtorName\": \"A. Lovelace\",\n  \"amount\": 120.00,\n  \"currency\": \"EUR\",\n  \"remittanceInformation\": \"1401541457 {{reservationId}}\",\n  \"bookedAt\": \"{{demo_booked_at}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set(\"demo_tx_ref\", \"BANK-TX-DEMO-\" + Date.now() + \"-a\");",
+                  "pm.environment.set(\"demo_booked_at\", new Date().toISOString());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 202\", () => pm.response.to.have.status(202));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "5. Get token (alice)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "password",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "marvel-postman",
+                  "type": "text"
+                },
+                {
+                  "key": "username",
+                  "value": "alice",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "{{password}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{keycloak_url}}/realms/marvel/protocol/openid-connect/token",
+              "host": [
+                "{{keycloak_url}}"
+              ],
+              "path": [
+                "realms",
+                "marvel",
+                "protocol",
+                "openid-connect",
+                "token"
+              ]
+            },
+            "description": "Password grant for dev user alice (reservation:read, reservation:write; properties AMS01, RTM01). Stores access_token in the environment."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "",
+                  "pm.test(\"Response has access_token\", function () {",
+                  "    pm.expect(json.access_token).to.be.a(\"string\").and.not.empty;",
+                  "});",
+                  "",
+                  "pm.environment.set(\"access_token\", json.access_token);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "6. Reservation is still PENDING_PAYMENT with 120.00 received",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{reservation_url}}/properties/AMS01/reservations/{{reservationId}}",
+              "host": [
+                "{{reservation_url}}"
+              ],
+              "path": [
+                "properties",
+                "AMS01",
+                "reservations",
+                "{{reservationId}}"
+              ]
+            },
+            "description": "Retries for up to ~10 s: the payment travels outbox -> Debezium -> Kafka -> consumer."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expectStatus = \"PENDING_PAYMENT\", expectAmount = \"120.00\";",
+                  "const attempt = Number(pm.environment.get(\"demo_attempt\") || 0);",
+                  "const json = pm.response.json();",
+                  "const done = json.status === expectStatus && Number(json.amountReceived).toFixed(2) === expectAmount;",
+                  "if (!done && attempt < 10) {",
+                  "    pm.environment.set(\"demo_attempt\", attempt + 1);",
+                  "    setTimeout(() => {}, 1000);",
+                  "    pm.execution.setNextRequest(pm.info.requestName);",
+                  "} else {",
+                  "    pm.environment.unset(\"demo_attempt\");",
+                  "    pm.test(\"status is \" + expectStatus, () => pm.expect(json.status).to.eql(expectStatus));",
+                  "    pm.test(\"amountReceived is \" + expectAmount, () => pm.expect(Number(json.amountReceived).toFixed(2)).to.eql(expectAmount));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "7. Get token (bank-simulator)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "client_credentials",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "bank-simulator",
+                  "type": "text"
+                },
+                {
+                  "key": "client_secret",
+                  "value": "{{bank_simulator_client_secret}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{keycloak_url}}/realms/marvel/protocol/openid-connect/token",
+              "host": [
+                "{{keycloak_url}}"
+              ],
+              "path": [
+                "realms",
+                "marvel",
+                "protocol",
+                "openid-connect",
+                "token"
+              ]
+            },
+            "description": "Client-credentials grant for the bank-simulator service account (role bank:ingest; properties [\"*\"]). Stores access_token in the environment."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "",
+                  "pm.test(\"Response has access_token\", function () {",
+                  "    pm.expect(json.access_token).to.be.a(\"string\").and.not.empty;",
+                  "});",
+                  "",
+                  "pm.environment.set(\"access_token\", json.access_token);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "8. Bank pays the remaining 120.00",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{payment_url}}/bank-transactions",
+              "host": [
+                "{{payment_url}}"
+              ],
+              "path": [
+                "bank-transactions"
+              ]
+            },
+            "description": "The bank (bank-simulator token) reports 120.00 for the reservation created above; the remittance names it.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bankTransactionRef\": \"{{demo_tx_ref}}\",\n  \"debtorAccountNumber\": \"NL91ABNA0417164300\",\n  \"debtorName\": \"A. Lovelace\",\n  \"amount\": 120.00,\n  \"currency\": \"EUR\",\n  \"remittanceInformation\": \"1401541457 {{reservationId}}\",\n  \"bookedAt\": \"{{demo_booked_at}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set(\"demo_tx_ref\", \"BANK-TX-DEMO-\" + Date.now() + \"-b\");",
+                  "pm.environment.set(\"demo_booked_at\", new Date().toISOString());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 202\", () => pm.response.to.have.status(202));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "9. Get token (alice)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "password",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "marvel-postman",
+                  "type": "text"
+                },
+                {
+                  "key": "username",
+                  "value": "alice",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "{{password}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{keycloak_url}}/realms/marvel/protocol/openid-connect/token",
+              "host": [
+                "{{keycloak_url}}"
+              ],
+              "path": [
+                "realms",
+                "marvel",
+                "protocol",
+                "openid-connect",
+                "token"
+              ]
+            },
+            "description": "Password grant for dev user alice (reservation:read, reservation:write; properties AMS01, RTM01). Stores access_token in the environment."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "",
+                  "pm.test(\"Response has access_token\", function () {",
+                  "    pm.expect(json.access_token).to.be.a(\"string\").and.not.empty;",
+                  "});",
+                  "",
+                  "pm.environment.set(\"access_token\", json.access_token);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "10. Reservation is CONFIRMED with 240.00 received",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{reservation_url}}/properties/AMS01/reservations/{{reservationId}}",
+              "host": [
+                "{{reservation_url}}"
+              ],
+              "path": [
+                "properties",
+                "AMS01",
+                "reservations",
+                "{{reservationId}}"
+              ]
+            },
+            "description": "Retries for up to ~10 s: the payment travels outbox -> Debezium -> Kafka -> consumer."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expectStatus = \"CONFIRMED\", expectAmount = \"240.00\";",
+                  "const attempt = Number(pm.environment.get(\"demo_attempt\") || 0);",
+                  "const json = pm.response.json();",
+                  "const done = json.status === expectStatus && Number(json.amountReceived).toFixed(2) === expectAmount;",
+                  "if (!done && attempt < 10) {",
+                  "    pm.environment.set(\"demo_attempt\", attempt + 1);",
+                  "    setTimeout(() => {}, 1000);",
+                  "    pm.execution.setNextRequest(pm.info.requestName);",
+                  "} else {",
+                  "    pm.environment.unset(\"demo_attempt\");",
+                  "    pm.test(\"status is \" + expectStatus, () => pm.expect(json.status).to.eql(expectStatus));",
+                  "    pm.test(\"amountReceived is \" + expectAmount, () => pm.expect(Number(json.amountReceived).toFixed(2)).to.eql(expectAmount));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "11. List payments of the reservation",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{reservation_url}}/properties/AMS01/reservations/{{reservationId}}/payments",
+              "host": [
+                "{{reservation_url}}"
+              ],
+              "path": [
+                "properties",
+                "AMS01",
+                "reservations",
+                "{{reservationId}}",
+                "payments"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "const outcomes = pm.response.json().map(p => p.outcome);",
+                  "pm.test(\"MATCHED_PARTIAL then MATCHED_FULL\", () => pm.expect(outcomes).to.eql([\"MATCHED_PARTIAL\", \"MATCHED_FULL\"]));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "room-reservation-service",
       "item": [
         {
@@ -239,8 +1000,12 @@
             "header": [],
             "url": {
               "raw": "{{reservation_url}}/whoami",
-              "host": ["{{reservation_url}}"],
-              "path": ["whoami"]
+              "host": [
+                "{{reservation_url}}"
+              ],
+              "path": [
+                "whoami"
+              ]
             },
             "description": "Bearer-authenticated identity check: subject, username, roles[], properties[]."
           },
@@ -279,8 +1044,12 @@
             "header": [],
             "url": {
               "raw": "{{reservation_url}}/whoami",
-              "host": ["{{reservation_url}}"],
-              "path": ["whoami"]
+              "host": [
+                "{{reservation_url}}"
+              ],
+              "path": [
+                "whoami"
+              ]
             },
             "description": "No Authorization header: expects a 401 ProblemDetail with code UNAUTHENTICATED."
           },
@@ -333,8 +1102,14 @@
                 },
                 "url": {
                   "raw": "{{reservation_url}}/properties/AMS01/reservations",
-                  "host": ["{{reservation_url}}"],
-                  "path": ["properties", "AMS01", "reservations"]
+                  "host": [
+                    "{{reservation_url}}"
+                  ],
+                  "path": [
+                    "properties",
+                    "AMS01",
+                    "reservations"
+                  ]
                 },
                 "description": "Creates a CASH reservation for property AMS01, room 101 (SMALL); CASH is confirmed immediately. Saves reservationId to the environment for later requests."
               },
@@ -386,8 +1161,14 @@
                 },
                 "url": {
                   "raw": "{{reservation_url}}/properties/AMS01/reservations",
-                  "host": ["{{reservation_url}}"],
-                  "path": ["properties", "AMS01", "reservations"]
+                  "host": [
+                    "{{reservation_url}}"
+                  ],
+                  "path": [
+                    "properties",
+                    "AMS01",
+                    "reservations"
+                  ]
                 },
                 "description": "Creates a BANK_TRANSFER reservation for property AMS01, room 201 (MEDIUM): PENDING_PAYMENT with a payment deadline and bank transfer instructions. Saves reservationId to the environment for later requests."
               },
@@ -584,8 +1365,15 @@
                 "header": [],
                 "url": {
                   "raw": "{{reservation_url}}/properties/AMS01/reservations/{{reservationId}}",
-                  "host": ["{{reservation_url}}"],
-                  "path": ["properties", "AMS01", "reservations", "{{reservationId}}"]
+                  "host": [
+                    "{{reservation_url}}"
+                  ],
+                  "path": [
+                    "properties",
+                    "AMS01",
+                    "reservations",
+                    "{{reservationId}}"
+                  ]
                 },
                 "description": "Fetches the reservation created by one of the \"Create ...\" requests above (reservationId from the environment)."
               },
@@ -617,8 +1405,16 @@
                 "header": [],
                 "url": {
                   "raw": "{{reservation_url}}/properties/AMS01/reservations/{{reservationId}}/payments",
-                  "host": ["{{reservation_url}}"],
-                  "path": ["properties", "AMS01", "reservations", "{{reservationId}}", "payments"]
+                  "host": [
+                    "{{reservation_url}}"
+                  ],
+                  "path": [
+                    "properties",
+                    "AMS01",
+                    "reservations",
+                    "{{reservationId}}",
+                    "payments"
+                  ]
                 },
                 "description": "received_payment rows matched to this reservation (ADR-0009). reservation:read + property AMS01."
               },
@@ -651,8 +1447,12 @@
                 "header": [],
                 "url": {
                   "raw": "{{reservation_url}}/reference-data",
-                  "host": ["{{reservation_url}}"],
-                  "path": ["reference-data"]
+                  "host": [
+                    "{{reservation_url}}"
+                  ],
+                  "path": [
+                    "reference-data"
+                  ]
                 },
                 "description": "No authentication required (marvel.security.additional-public-paths). Lists every enum value this service uses, built from Enum.values()."
               },
@@ -693,8 +1493,14 @@
                 "header": [],
                 "url": {
                   "raw": "{{reservation_url}}/properties/AMS01/unmatched-payments",
-                  "host": ["{{reservation_url}}"],
-                  "path": ["properties", "AMS01", "unmatched-payments"]
+                  "host": [
+                    "{{reservation_url}}"
+                  ],
+                  "path": [
+                    "properties",
+                    "AMS01",
+                    "unmatched-payments"
+                  ]
                 },
                 "description": "UNMATCHED_NOT_PENDING payments for AMS01: paid after the reservation was cancelled or already confirmed. Refunded automatically (ADR-0009); this is the staff follow-up view. reservation:read + property AMS01."
               },
@@ -724,8 +1530,12 @@
                 "header": [],
                 "url": {
                   "raw": "{{reservation_url}}/unmatched-payments",
-                  "host": ["{{reservation_url}}"],
-                  "path": ["unmatched-payments"]
+                  "host": [
+                    "{{reservation_url}}"
+                  ],
+                  "path": [
+                    "unmatched-payments"
+                  ]
                 },
                 "description": "UNMATCHED_FORMAT and UNMATCHED_UNKNOWN_RESERVATION payments: no reservation could be found at all, so there is no property to check. Guarded by bank:read instead (ADR-0009); alice and bob both hold it."
               },
@@ -762,8 +1572,12 @@
             "header": [],
             "url": {
               "raw": "{{payment_url}}/whoami",
-              "host": ["{{payment_url}}"],
-              "path": ["whoami"]
+              "host": [
+                "{{payment_url}}"
+              ],
+              "path": [
+                "whoami"
+              ]
             },
             "description": "Bearer-authenticated identity check: subject, username, roles[], properties[]."
           },
@@ -1106,8 +1920,12 @@
             "header": [],
             "url": {
               "raw": "{{notification_url}}/whoami",
-              "host": ["{{notification_url}}"],
-              "path": ["whoami"]
+              "host": [
+                "{{notification_url}}"
+              ],
+              "path": [
+                "whoami"
+              ]
             },
             "description": "Bearer-authenticated identity check: subject, username, roles[], properties[]."
           },

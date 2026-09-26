@@ -10,10 +10,10 @@ TOKEN_USER := $(if $(filter command line,$(origin USER)),$(USER),alice)
 PASSWORD   ?= password
 CLIENT     ?= bank-simulator
 
-.PHONY: help build-all test-all check-contracts up up-apps down logs reset token client-token replay-dlt
+.PHONY: help build-all test-all check-contracts up up-apps down clean logs reset token client-token replay-dlt
 
 help:
-	@echo "build-all | test-all | check-contracts | up | up-apps | down | logs | reset | token USER=alice | client-token CLIENT=bank-simulator | replay-dlt TOPIC=bank-transfer-payment-update [MAX=N] [DRY_RUN=1]"
+	@echo "build-all | test-all | check-contracts | up | up-apps | down | clean | logs | reset | token USER=alice | client-token CLIENT=bank-simulator | replay-dlt TOPIC=bank-transfer-payment-update [MAX=N] [DRY_RUN=1]"
 
 # The credit-card spec exists twice on purpose: the provider's copy (served by the stub) and the consumer's copy (the
 # reservation service generates its client from it). Each service builds from its own file; this keeps them identical.
@@ -52,6 +52,13 @@ down: $(ENV_FILE)
 
 logs: $(ENV_FILE)
 	$(COMPOSE) --profile apps logs -f
+
+# Removes everything the stack created: containers, volumes (all data), the network and the service images it built
+# (marvel-hospitality/*). Pulled images (Postgres, Kafka, Keycloak, ...) are kept, so they are not downloaded again.
+# infra/.env is kept. The next `make up-apps` starts from scratch, as on a fresh clone.
+clean: $(ENV_FILE)
+	$(COMPOSE) --profile apps down -v --remove-orphans
+	docker image rm -f $$($(COMPOSE) --profile apps config --images | grep '^marvel-hospitality/') 2>/dev/null || true
 
 # Wipes every volume (Postgres, Kafka, Keycloak) and starts again. Keycloak re-imports
 # infra/keycloak/realm/marvel-realm.json only because its database is empty again.
