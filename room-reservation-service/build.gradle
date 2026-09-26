@@ -63,14 +63,15 @@ dependencies {
 }
 
 // Client for credit-card-payment-service, generated at build time from the corrected contract (ADR-0011). The spec is
-// read straight from docs/contracts (one copy, no drift); generated sources live in build/ and are never committed.
+// this service's own copy of the provider's (src/main/resources/openapi; `make check-contracts` keeps it identical to
+// the stub's); generated sources live in build/ and are never committed.
 def creditCardGeneratedDir = layout.buildDirectory.dir('generated/openapi/credit-card')
 def creditCardPackage = 'com.marvel.hospitality.reservation.infrastructure.creditcard.generated'
 
 openApiGenerate {
     generatorName = 'java'
     library = 'restclient'
-    inputSpec = file('../docs/contracts/credit-card-payment-api.yaml').path
+    inputSpec = file('src/main/resources/openapi/credit-card-payment-api.yaml').path
     outputDir = creditCardGeneratedDir.get().asFile.path
     apiPackage = "${creditCardPackage}.api"
     modelPackage = "${creditCardPackage}.model"

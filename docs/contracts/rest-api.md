@@ -131,7 +131,7 @@ Error codes: `VALIDATION_FAILED` 400, `UNAUTHENTICATED` 401, `FORBIDDEN` 403, `B
 `UNSUPPORTED_CURRENCY` 422, `INTERNAL_ERROR` 500.
 
 ## credit-card-payment-service (port 9090, base path `/credit-card-payment-api`)
-Implements `credit-card-payment-api.yaml` exactly. Deterministic stub behaviour keyed on `paymentReference`:
+Implements the corrected spec (`credit-card-payment-service/src/main/resources/openapi/credit-card-payment-api.yaml`) exactly. Deterministic stub behaviour keyed on `paymentReference`:
 - prefix `OK`  → 200 `CONFIRMED`
 - prefix `REJ` → 200 `REJECTED`
 - prefix `SLOW`→ sleeps 5 s then 200 `CONFIRMED` (drives the timeout test)

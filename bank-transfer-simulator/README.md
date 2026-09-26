@@ -133,6 +133,10 @@ exists, this is the case that produces an unmatched payment for reconciliation.
 
 ## `GET /bank-transactions/{paymentId}`
 
-Role `bank:read`. In the current Keycloak realm **no user or client holds `bank:read` yet** — this is
-an open item. The Postman request for it documents this and expects `403 FORBIDDEN` with
-the `bank-simulator` token (role `bank:ingest` only) until that's resolved.
+Role `bank:read`, held by the `bank-simulator` service account and by every dev user (alice, bob, carol). Read back
+a transaction you posted, using the `paymentId` from the response:
+
+```
+curl -s http://localhost:8081/bank-transactions/<paymentId> \
+  -H "Authorization: Bearer $(./bank-transfer-simulator/scripts/token.sh)" | jq
+```

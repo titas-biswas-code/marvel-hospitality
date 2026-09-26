@@ -192,9 +192,10 @@ human_user() {
   grant_roles "${user}" "$@"
 }
 
-human_user alice Alice Anderson '["AMS01","RTM01"]' reservation:read reservation:write
-human_user bob   Bob   Brown    '["AMS01"]'         reservation:read reservation:write
-human_user carol Carol Clark    '["RTM01"]'         reservation:read
+# bank:read lets staff look up a bank transaction in the payment ledger (GET /bank-transactions/{paymentId}).
+human_user alice Alice Anderson '["AMS01","RTM01"]' reservation:read reservation:write bank:read
+human_user bob   Bob   Brown    '["AMS01"]'         reservation:read reservation:write bank:read
+human_user carol Carol Clark    '["RTM01"]'         reservation:read bank:read
 
 # Service accounts operate on every property.
 for client in bank-simulator room-reservation-service bank-transfer-payment-service; do
@@ -202,6 +203,7 @@ for client in bank-simulator room-reservation-service bank-transfer-payment-serv
   sa_id="$(kc get "clients/$(client_id_of "${client}")/service-account-user" -r "${REALM}" --fields id --format csv --noquotes | tr -d '\r')"
   set_properties "${sa_id}" '["*"]'
 done
-grant_roles service-account-bank-simulator bank:ingest
+# The bank posts transactions and may read back what it posted.
+grant_roles service-account-bank-simulator bank:ingest bank:read
 
 log "done. Run ./export.sh to refresh realm/marvel-realm.json."

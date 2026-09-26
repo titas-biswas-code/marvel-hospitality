@@ -72,16 +72,16 @@ class KeycloakRealmSmokeTest {
                 "grant_type", "password", "client_id", "marvel-postman", "username", "alice", "password", "password")));
 
         assertThat(whoami.username()).isEqualTo("alice");
-        assertThat(whoami.roles()).contains("reservation:read", "reservation:write");
+        assertThat(whoami.roles()).contains("reservation:read", "reservation:write", "bank:read");
         assertThat(whoami.properties()).containsExactly("AMS01", "RTM01");
     }
 
     @Test
-    void bankSimulatorServiceAccountCarriesIngestRoleAndAllProperties() {
+    void bankSimulatorServiceAccountCarriesBankRolesAndAllProperties() {
         WhoamiResponse whoami = whoami(token(Map.of(
                 "grant_type", "client_credentials", "client_id", "bank-simulator", "client_secret", BANK_SIMULATOR_SECRET)));
 
-        assertThat(whoami.roles()).contains("bank:ingest");
+        assertThat(whoami.roles()).contains("bank:ingest", "bank:read");
         assertThat(whoami.properties()).containsExactly("*");
     }
 

@@ -49,7 +49,7 @@ reservation:
 
 credit-card:
   client:
-    # Spec base path included (docs/contracts/credit-card-payment-api.yaml, servers.url).
+    # Spec base path included (src/main/resources/openapi/credit-card-payment-api.yaml, servers.url).
     base-url: ${CREDIT_CARD_BASE_URL:http://localhost:9090/credit-card-payment-api}
     # ADR-0011. Enforced by the HTTP client; the call is blocking, so no Resilience4j TimeLimiter.
     connect-timeout: 1s

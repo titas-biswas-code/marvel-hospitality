@@ -470,7 +470,7 @@
     } ],
     "disableableCredentialTypes" : [ ],
     "requiredActions" : [ ],
-    "realmRoles" : [ "reservation:write", "reservation:read", "default-roles-marvel" ],
+    "realmRoles" : [ "reservation:write", "bank:read", "reservation:read", "default-roles-marvel" ],
     "notBefore" : 0,
     "groups" : [ ]
   }, {
@@ -495,7 +495,7 @@
     } ],
     "disableableCredentialTypes" : [ ],
     "requiredActions" : [ ],
-    "realmRoles" : [ "reservation:write", "reservation:read", "default-roles-marvel" ],
+    "realmRoles" : [ "reservation:write", "bank:read", "reservation:read", "default-roles-marvel" ],
     "notBefore" : 0,
     "groups" : [ ]
   }, {
@@ -520,7 +520,7 @@
     } ],
     "disableableCredentialTypes" : [ ],
     "requiredActions" : [ ],
-    "realmRoles" : [ "reservation:read", "default-roles-marvel" ],
+    "realmRoles" : [ "bank:read", "reservation:read", "default-roles-marvel" ],
     "notBefore" : 0,
     "groups" : [ ]
   }, {
@@ -537,7 +537,7 @@
     "credentials" : [ ],
     "disableableCredentialTypes" : [ ],
     "requiredActions" : [ ],
-    "realmRoles" : [ "bank:ingest", "default-roles-marvel" ],
+    "realmRoles" : [ "bank:read", "bank:ingest", "default-roles-marvel" ],
     "notBefore" : 0,
     "groups" : [ ]
   }, {
@@ -1657,7 +1657,7 @@
       "subType" : "authenticated",
       "subComponents" : { },
       "config" : {
-        "allowed-protocol-mapper-types" : [ "saml-user-property-mapper", "oidc-address-mapper", "oidc-usermodel-property-mapper", "saml-role-list-mapper", "saml-user-attribute-mapper", "oidc-full-name-mapper", "oidc-usermodel-attribute-mapper", "oidc-sha256-pairwise-sub-mapper" ]
+        "allowed-protocol-mapper-types" : [ "saml-user-property-mapper", "oidc-usermodel-attribute-mapper", "saml-user-attribute-mapper", "oidc-usermodel-property-mapper", "oidc-address-mapper", "saml-role-list-mapper", "oidc-full-name-mapper", "oidc-sha256-pairwise-sub-mapper" ]
       }
     }, {
       "id" : "8ff63572-b013-4024-9d37-1c3d38fccc0e",
@@ -1666,7 +1666,7 @@
       "subType" : "anonymous",
       "subComponents" : { },
       "config" : {
-        "allowed-protocol-mapper-types" : [ "saml-role-list-mapper", "oidc-address-mapper", "oidc-usermodel-property-mapper", "saml-user-attribute-mapper", "oidc-usermodel-attribute-mapper", "oidc-full-name-mapper", "oidc-sha256-pairwise-sub-mapper", "saml-user-property-mapper" ]
+        "allowed-protocol-mapper-types" : [ "saml-user-property-mapper", "oidc-full-name-mapper", "oidc-usermodel-property-mapper", "saml-user-attribute-mapper", "saml-role-list-mapper", "oidc-sha256-pairwise-sub-mapper", "oidc-address-mapper", "oidc-usermodel-attribute-mapper" ]
       }
     }, {
       "id" : "8ca3216a-86a8-4165-8f39-5be1e23606ea",

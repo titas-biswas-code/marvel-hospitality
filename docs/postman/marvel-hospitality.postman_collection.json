@@ -965,7 +965,7 @@
                     "{{bank_payment_id}}"
                   ]
                 },
-                "description": "Needs a token with bank:read; no dev user/client has it yet (an open item, see docs/contracts/security.md). Running this with the bank-simulator token (role bank:ingest only, from 'Get token (bank-simulator, client credentials)') is expected to return 403 FORBIDDEN, not the transaction. Once a bank:read-capable credential exists in the realm, get a token with it and rerun this request; the expected response is then 200 with paymentId, bankTransactionRef, debtorAccountNumber, debtorName, amount, currency, remittanceInformation, bookedAt, receivedAt."
+                "description": "Role bank:read. Every dev user (alice, bob, carol) and the bank-simulator service account hold it, so the token from any 'Get token' request works. Uses the paymentId stored by 'Post bank transaction (new → 202)'."
               },
               "event": [
                 {
@@ -973,14 +973,20 @@
                   "script": {
                     "type": "text/javascript",
                     "exec": [
-                      "pm.test(\"Status code is 403 (no credential in this realm has bank:read yet)\", function () {",
-                      "    pm.response.to.have.status(403);",
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
                       "});",
                       "",
                       "const json = pm.response.json();",
                       "",
-                      "pm.test(\"code is FORBIDDEN\", function () {",
-                      "    pm.expect(json.code).to.eql(\"FORBIDDEN\");",
+                      "pm.test(\"Returns the transaction posted earlier\", function () {",
+                      "    pm.expect(json.paymentId).to.eql(pm.environment.get(\"bank_payment_id\"));",
+                      "    pm.expect(json.bankTransactionRef).to.eql(pm.environment.get(\"bank_tx_ref\"));",
+                      "    pm.expect(json.currency).to.eql(\"EUR\");",
+                      "});",
+                      "",
+                      "pm.test(\"amount keeps two fraction digits on the wire\", function () {",
+                      "    pm.expect(pm.response.text()).to.include('\"amount\":120.00');",
                       "});"
                     ]
                   }
@@ -1036,7 +1042,7 @@
     },
     {
       "name": "credit-card-payment-service",
-      "description": "The stub implementing docs/contracts/credit-card-payment-api.yaml. No auth (the spec declares none, ADR-0011). Behaviour by reference prefix: OK → CONFIRMED, REJ → REJECTED, SLOW → 5 s then CONFIRMED, ERR → 500, anything else → 404.",
+      "description": "The stub implementing the corrected credit-card spec (credit-card-payment-service/src/main/resources/openapi/credit-card-payment-api.yaml). No auth (the spec declares none, ADR-0011). Behaviour by reference prefix: OK → CONFIRMED, REJ → REJECTED, SLOW → 5 s then CONFIRMED, ERR → 500, anything else → 404.",
       "auth": {
         "type": "noauth"
       },

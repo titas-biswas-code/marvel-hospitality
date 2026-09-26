@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Implements {@code docs/contracts/credit-card-payment-api.yaml} verbatim (ADR-0011): this is an
+ * Implements {@code src/main/resources/openapi/credit-card-payment-api.yaml} verbatim (ADR-0011): this is an
  * in-memory stub, not a real payment gateway, so the "business logic" is a deterministic mapping from the
  * {@code paymentReference} prefix to an outcome — no persistence, no state. The prefix contract (documented
  * in rest-api.md's credit-card-payment-service section) lets a demo or manual test drive every branch of the

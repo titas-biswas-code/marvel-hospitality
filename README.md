@@ -13,60 +13,23 @@ Local environment (Postgres, Kafka, Debezium, Keycloak, Grafana): see `infra/REA
 | Security: Keycloak JWT validated by every service, role + property authorization (ADR-0012) | done |
 | Reservations: create `CASH` (→ `CONFIRMED`) and `BANK_TRANSFER` (→ `PENDING_PAYMENT` with a payment deadline), get by id, `/reference-data`; overbooking prevented by a Postgres exclusion constraint (ADR-0005); an outbox row for every status change (ADR-0006) | done |
 | Credit card: `CREDIT_CARD` reservations checked synchronously against `credit-card-payment-service` (a stub of the provided spec) through a client generated from the corrected spec, with timeouts, retry and circuit breaker (ADR-0011) | done |
-| Bank payments via Kafka/Debezium, auto-cancel, refunds, notifications, observability | next |
+| Bank payments: `bank-transfer-payment-service` ledger with idempotent `POST /bank-transactions`; its outbox and the reservation outbox published to Kafka by Debezium (ADR-0007, ADR-0014); bank simulator scripts | done |
+| Payment matching (reservation service consumes the bank topic), auto-cancel, refunds, notifications, observability | next |
 
 Try it: `make up-apps`, then Swagger UI at http://localhost:8080/swagger-ui.html (or the unified one at
-http://localhost:8088), or the Postman collection in `docs/postman/` (Auth folder for a token, then "Reservations").
+http://localhost:8088), or the Postman collection in `docs/postman/` (Auth folder for a token, then "Reservations" / "Bank transactions").
+Pay for a bank-transfer reservation as "the bank" with `bank-transfer-simulator/` (see its README).
 
-## Spec defects found
+## Further reading
 
-The provided `credit-card-payment-service` OpenAPI spec has defects. Generating a client from it as provided does
-work, but the payment status comes out as a plain `String` with no allowed values, `lastUpdateDate` as a `String`
-rather than a timestamp, and the server URL is unusable. The corrected copy is
-`docs/contracts/credit-card-payment-api.yaml`; both the stub and the generated client in `room-reservation-service`
-are built from it (ADR-0011). The spec exactly as provided is kept beside it in
-`docs/contracts/credit-card-payment-api.original.yaml`, so every change can be checked with a diff. None of the
-corrections changes a request or response on the wire. What was wrong in the original:
-
-1. `servers.url` was `http//:localhost:9090//host/credit-card-payment-api` — malformed scheme, a double slash and
-   a stray `host` segment. Corrected to `http://localhost:9090/credit-card-payment-api`.
-2. `PaymentStatusResponse.status` declared `format: enum` with a nested list; OpenAPI needs `enum: [CONFIRMED, REJECTED]`.
-   As written, generators produce a plain `String` and no allowed values.
-3. `PaymentStatusResponse.status` was described as "Expiry date of the driving license" — a copy-paste leftover.
-4. `lastUpdateDate` used `format: datetime`; the OpenAPI format is `date-time`, so it was not parsed as a timestamp.
-5. No security scheme is declared. Kept as-is (assumed network-internal); a real deployment would use a
-   service-account token (ADR-0011, ADR-0012).
-
-One addition that is not a defect fix: an `operationId` (`retrievePaymentStatus`), which only names the generated
-client method. Nothing else was tightened; in particular `status` is still not declared `required`, because the
-provider does not promise it. The client treats a `200` without a status as a contract violation.
-
-## CDC durability demo (outbox → Debezium → Kafka)
-
-Shows that a payment is never lost even if Kafka Connect is down when it happens — it just arrives late.
-
-1. `make up-apps`.
-2. Stop Kafka Connect: `docker compose -f infra/docker-compose.yml --env-file infra/.env stop connect`.
-3. Post two bank transactions while Connect is down:
-   `./bank-transfer-simulator/scripts/post-bank-transaction.sh --reservation P4145478 --amount 120`
-   (twice, with different `--ref`s, or via `pay-in-full.sh` against two reservations).
-4. Confirm both landed in Postgres despite Connect being down:
-   `docker compose -f infra/docker-compose.yml --env-file infra/.env exec postgres \
-     psql -U payment -d payment -c "select aggregate_id, event_type, created_at from outbox_event order by created_at desc limit 5"`.
-5. Confirm they are **not** yet on Kafka: open kafka-ui (http://localhost:8090), topic
-   `bank-transfer-payment-update` — message count hasn't moved.
-6. Restart Connect: `docker compose -f infra/docker-compose.yml --env-file infra/.env start connect`.
-   Within a few seconds both messages appear on the topic, each with key = `paymentId` and a `propertyId` header
-   whose value is null (the bank topic has no property).
-
-Why this works: the outbox row commits in the same Postgres transaction as the ledger row, so step 3 succeeds and
-is durable whatever state Connect is in. Debezium does not poll the table; it reads the write-ahead log through a
-replication slot and, on restart, resumes from the slot's last confirmed position, so nothing in between is
-skipped. Postgres keeps the WAL the stopped slot still needs, up to `max_slot_wal_keep_size=1GB`
-(`infra/docker-compose.yml`): beyond that Postgres invalidates the slot to protect its disk, and the connector must
-be re-created (runbook in `infra/README.md`). Delivery is at-least-once, so consumers deduplicate (inbox,
-ADR-0006); ordering is guaranteed per key (`paymentId`), not across payments.
-
-Design decisions: `docs/adr/`. API and event contracts: `docs/contracts/`.
+| Topic | Where |
+|---|---|
+| Design decisions | [docs/adr/](docs/adr/) |
+| API, event and database contracts | [docs/contracts/](docs/contracts/) |
+| Defects in the provided credit-card spec, and the corrections | [docs/credit-card-spec-defects.md](docs/credit-card-spec-defects.md) |
+| CDC durability demo (stop Kafka Connect, lose nothing) | [docs/cdc-durability-demo.md](docs/cdc-durability-demo.md) |
+| Local infrastructure, ports, connectors, runbook | [infra/README.md](infra/README.md) |
+| Bank simulator scripts | [bank-transfer-simulator/README.md](bank-transfer-simulator/README.md) |
+| Resolved library and image versions | [docs/versions.md](docs/versions.md) |
 
 (The full README with the end-to-end demo follows in a later PR.)
