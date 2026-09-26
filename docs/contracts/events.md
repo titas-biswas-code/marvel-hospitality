@@ -39,9 +39,9 @@ Debezium Outbox Event Router places these from outbox columns (see `outbox-and-i
   "reservationId": "P4145478",
   "propertyId": "AMS01",
   "customerName": "Ada Lovelace",
-  "roomNumber": "101",
-  "startDate": "2026-10-10",
-  "endDate": "2026-10-12",
+  "roomNumber": "201",
+  "startDate": "2027-10-10",
+  "endDate": "2027-10-12",
   "paymentMode": "BANK_TRANSFER",
   "previousStatus": null,
   "status": "PENDING_PAYMENT",
@@ -49,7 +49,7 @@ Debezium Outbox Event Router places these from outbox columns (see `outbox-and-i
   "totalAmount": 240.00,
   "amountReceived": 0.00,
   "currency": "EUR",
-  "paymentDeadlineAt": "2026-10-07T22:00:00Z",
+  "paymentDeadlineAt": "2027-10-07T22:00:00Z",
   "occurredAt": "2026-09-26T10:00:00Z"
 }
 ```
