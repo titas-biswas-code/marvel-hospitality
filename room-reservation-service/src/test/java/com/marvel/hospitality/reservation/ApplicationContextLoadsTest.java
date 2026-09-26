@@ -3,6 +3,7 @@ package com.marvel.hospitality.reservation;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.marvel.hospitality.platform.outbox.OutboxPurgeJob;
+import com.marvel.hospitality.reservation.infrastructure.scheduling.AutoCancelJob;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -35,6 +36,14 @@ class ApplicationContextLoadsTest {
         // platform/outbox-starter wires the daily purge job (MarvelOutboxAutoConfiguration) whenever a JdbcClient
         // bean exists; this service must not silently lose it (docs/contracts/outbox-and-inbox.md retention).
         assertThat(applicationContext.getBean(OutboxPurgeJob.class)).isNotNull();
+    }
+
+    @Test
+    void doesNotRegisterAutoCancelJobUnlessEnabled() {
+        // The test profile turns reservation.auto-cancel.enabled off (application.yml), so no context here races a
+        // live scheduler against whatever Clock and fixtures another test happens to be using at the same moment;
+        // AutoCancelIntegrationTest switches the property on itself and is the only place this bean exists.
+        assertThat(applicationContext.getBeanProvider(AutoCancelJob.class).getIfAvailable()).isNull();
     }
 
     @Test

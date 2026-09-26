@@ -55,6 +55,13 @@ reservation:
   payment-service-unavailable:
     # Retry-After on 503 PAYMENT_SERVICE_UNAVAILABLE (rest-api.md); a bit longer than the circuit needs to probe again.
     retry-after: 5s
+  auto-cancel:
+    # ADR-0010. Cancels BANK_TRANSFER reservations still PENDING_PAYMENT at their payment deadline. Safe with any number
+    # of instances (each row is claimed with FOR UPDATE SKIP LOCKED); off in the test profile, tests switch it on.
+    enabled: ${RESERVATION_AUTO_CANCEL_ENABLED:true}
+    interval: ${RESERVATION_AUTO_CANCEL_INTERVAL:PT60S}   # pause between the end of one run and the start of the next
+    initial-delay: PT30S
+    batch-size: 100   # rows read per page; each row is still cancelled in its own transaction
 
 credit-card:
   client:
@@ -171,6 +178,12 @@ spring:
     listener:
       # Only the Kafka integration tests start listeners (and bring a broker); other contexts never connect.
       auto-startup: false
+
+reservation:
+  auto-cancel:
+    # A context-loading or Kafka test must never race a live scheduler; tests that exercise auto-cancel enable
+    # this explicitly and inject their own Clock instead of waiting on a real fixedDelay.
+    enabled: false
 
 marvel:
   kafka:
