@@ -389,6 +389,26 @@ class CreditCardReservationIntegrationTest {
     }
 
     @Test
+    void returns500AndPersistsNothingWhenPaymentServiceAnswersWithoutStatus() throws Exception {
+        LocalDate start = LocalDate.parse("2032-01-10");
+        LocalDate end = LocalDate.parse("2032-01-12");
+        // The provided spec does not declare `status` required; a 200 without it is a contract violation, not a
+        // "payment unavailable" (so no retry and no circuit-breaker failure) and certainly not a confirmation.
+        stubFor(WireMock.post(urlEqualTo(PAYMENT_STATUS_PATH))
+                .willReturn(okJson("""
+                        {"lastUpdateDate":"2032-01-01T00:00:00Z"}""")));
+
+        MvcResult result = postCreditCardReservation("301", RoomSegment.LARGE, start, end, "OK-NO-STATUS");
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(500);
+        assertThat(result.getResponse().getContentAsString()).contains("\"code\":\"INTERNAL_ERROR\"");
+        verify(1, postRequestedFor(urlEqualTo(PAYMENT_STATUS_PATH)));
+        assertThat(reservationCount("301", start)).isZero();
+        assertThat(circuitBreakerRegistry.circuitBreaker(RESILIENCE_INSTANCE).getMetrics().getNumberOfFailedCalls())
+                .isZero();
+    }
+
+    @Test
     void exposesCircuitBreakerHealthAndMetrics() {
         assertThat(meterRegistry.find("resilience4j.circuitbreaker.state").tag("name", RESILIENCE_INSTANCE).meters())
                 .as("resilience4j.circuitbreaker.state meter tagged name=creditCardPayment")
