@@ -1,0 +1,8 @@
+# Line endings are fixed here instead of being left to each machine's git settings. Shell scripts, gradlew and the
+# Dockerfiles run inside Linux containers, where the CRLF endings of a default Windows checkout break them
+# ("/bin/sh^M: bad interpreter"). Windows command files keep CRLF.
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+*.jar binary
