@@ -22,7 +22,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
  */
 @SpringBootTest(properties = "spring.kafka.listener.auto-startup=true")
 @Import({TestcontainersConfiguration.class, KafkaTestcontainersConfiguration.class, MockJwtDecoderConfiguration.class})
-@ActiveProfiles("test")
+// with-broker: this context has a real broker, so it keeps the production readiness group (application.yml).
+@ActiveProfiles({"test", "with-broker"})
 public abstract class KafkaListenersIntegrationTest {
 
     protected static final Duration TIMEOUT = Duration.ofSeconds(30);

@@ -4,6 +4,8 @@ import com.marvel.hospitality.reservation.application.CreateReservationUseCase;
 import com.marvel.hospitality.reservation.application.GetReservationUseCase;
 import com.marvel.hospitality.reservation.application.ReceivedPaymentQueries;
 import com.marvel.hospitality.reservation.application.ReservationView;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
@@ -41,15 +43,20 @@ import org.springframework.web.util.UriComponentsBuilder;
 @Tag(name = "Reservations", description = "Create and retrieve reservations.")
 class ReservationController {
 
+    /** Counter of created reservations, tagged {@code paymentMode}, {@code status}, {@code propertyId} (ADR-0013). */
+    static final String CREATED_METRIC = "reservation.created";
+
     private final CreateReservationUseCase createReservationUseCase;
     private final GetReservationUseCase getReservationUseCase;
     private final ReceivedPaymentQueries receivedPaymentQueries;
+    private final MeterRegistry meterRegistry;
 
     ReservationController(CreateReservationUseCase createReservationUseCase, GetReservationUseCase getReservationUseCase,
-            ReceivedPaymentQueries receivedPaymentQueries) {
+            ReceivedPaymentQueries receivedPaymentQueries, MeterRegistry meterRegistry) {
         this.createReservationUseCase = createReservationUseCase;
         this.getReservationUseCase = getReservationUseCase;
         this.receivedPaymentQueries = receivedPaymentQueries;
+        this.meterRegistry = meterRegistry;
     }
 
     @PostMapping
@@ -123,6 +130,14 @@ class ReservationController {
             @Parameter(in = ParameterIn.PATH, example = "AMS01") @PathVariable String propertyId,
             @Valid @org.springframework.web.bind.annotation.RequestBody CreateReservationRequest request) {
         ReservationView view = createReservationUseCase.create(request.toCommand(propertyId));
+        // Counted here, once the use case's transaction has committed: a rolled-back reservation is never counted.
+        Counter.builder(CREATED_METRIC)
+                .description("Reservations created, by payment mode and the status they were created in")
+                .tag("paymentMode", view.reservation().paymentMode().name())
+                .tag("status", view.reservation().status().name())
+                .tag("propertyId", propertyId)
+                .register(meterRegistry)
+                .increment();
         ReservationResponse body = ReservationResponse.from(view);
         URI location = UriComponentsBuilder.fromPath("/properties/{propertyId}/reservations/{reservationId}")
                 .buildAndExpand(propertyId, body.reservationId())

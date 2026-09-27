@@ -1,0 +1,11 @@
+# Grafana dashboard provider for otel-lgtm (ADR-0013). Mounted next to the image's own providers; the Prometheus,
+# Loki and Tempo data sources (uids prometheus, loki, tempo) come with the image and are not redefined here.
+apiVersion: 1
+
+providers:
+  - name: "Marvel Hospitality"
+    type: file
+    folder: "Marvel Hospitality"
+    options:
+      path: /otel-lgtm/marvel-dashboards
+      foldersFromFilesStructure: false

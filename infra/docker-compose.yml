@@ -184,12 +184,21 @@ services:
       retries: 30
       start_period: 30s
 
+  # Grafana + Loki + Tempo + Prometheus behind one OTLP receiver (ADR-0013). Every app service exports traces,
+  # metrics and logs to http://otel-lgtm:4318 (their `local` profile). Nothing depends on it: telemetry must never
+  # block the services from starting. The image provisions its own data sources; this adds the Marvel dashboard.
   otel-lgtm:
     image: grafana/otel-lgtm:0.34.0
     ports:
       - "3000:3000"   # Grafana
       - "4317:4317"   # OTLP gRPC
       - "4318:4318"   # OTLP HTTP
+    volumes:
+      # Traces, logs, metrics and Grafana's own state (sessions, plugins) live under /data: keep them across
+      # restarts and `make down`; `make clean` / `reset` remove the volume like every other one.
+      - otel-lgtm-data:/data
+      - ./grafana/provisioning/dashboards/marvel.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/marvel.yaml:ro
+      - ./grafana/dashboards:/otel-lgtm/marvel-dashboards:ro
     healthcheck:
       test: ["CMD-SHELL", "curl -fs http://localhost:3000/api/health > /dev/null"]
       interval: 10s
@@ -216,7 +225,7 @@ services:
       start_period: 20s
 
   room-reservation-service:
-    # Context is the repo root, not this service's dir: the build needs ../platform and ../docs/contracts.
+    # Context is the repo root, not this service's dir: the build needs ../platform.
     build: { context: .., dockerfile: room-reservation-service/Dockerfile }
     image: marvel-hospitality/room-reservation-service:local
     profiles: [apps]
@@ -334,3 +343,4 @@ volumes:
   postgres-data:
   kafka-data:
   keycloak-data:
+  otel-lgtm-data:

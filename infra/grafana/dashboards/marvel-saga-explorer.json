@@ -1,0 +1,154 @@
+{
+  "id": null,
+  "uid": "marvel-saga-explorer",
+  "title": "Marvel – Saga explorer",
+  "tags": [
+    "marvel"
+  ],
+  "timezone": "browser",
+  "editable": true,
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "reservationId",
+        "label": "Reservation id",
+        "type": "textbox",
+        "query": "",
+        "current": {
+          "text": "",
+          "value": ""
+        },
+        "hide": 0
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "title": "How to use this dashboard",
+      "description": "Explains how to trace a single reservation's saga across logs and traces.",
+      "gridPos": { "h": 4, "w": 24, "x": 0, "y": 0 },
+      "options": {
+        "mode": "markdown",
+        "content": "Enter a **reservation id** above (e.g. from `POST /properties/{propertyId}/reservations`). The logs panel shows every line about it from every service. Expand a line and click **Trace** next to `trace_id` to open the whole saga in Tempo; from a span, *Logs for this span* comes back here. The booking and each bank payment are separate traces; a payment's trace spans the payment service, the reservation service, notifications and any refund."
+      }
+    },
+    {
+      "id": 2,
+      "type": "logs",
+      "title": "Logs for this reservation (all services)",
+      "description": "Every log line, from every service, tagged with the reservation id entered above.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 14, "w": 24, "x": 0, "y": 4 },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Ascending",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "dedupStrategy": "none",
+        "showLabels": false,
+        "showCommonLabels": false
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "{service_name=~\".+\"} | reservationId=\"$reservationId\"",
+          "queryType": "range",
+          "range": true,
+          "editorMode": "code"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Log lines per service for this reservation",
+      "description": "Count of log lines about this reservation over time, broken out per service.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 18 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum by (service_name) (count_over_time({service_name=~\".+\"} | reservationId=\"$reservationId\" [$__auto]))",
+          "legendFormat": "{{service_name}}",
+          "queryType": "range",
+          "range": true,
+          "editorMode": "code"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "table",
+      "title": "Recent sagas (traces with a Kafka hop)",
+      "description": "Traces that include at least one Kafka consumer span, i.e. crossed the outbox → Debezium → Kafka hop; click a trace id to open it.",
+      "datasource": { "type": "tempo", "uid": "tempo" },
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 18 },
+      "targets": [
+        {
+          "datasource": { "type": "tempo", "uid": "tempo" },
+          "refId": "A",
+          "queryType": "traceql",
+          "query": "{ kind = consumer }",
+          "limit": 20,
+          "tableType": "traces"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "logs",
+      "title": "Warnings and errors (all services)",
+      "description": "All WARN and ERROR log lines from every service, newest first.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 25 },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "dedupStrategy": "none",
+        "showLabels": false,
+        "showCommonLabels": false
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "{service_name=~\".+\"} | severity_text=~\"WARN|ERROR\"",
+          "queryType": "range",
+          "range": true,
+          "editorMode": "code"
+        }
+      ]
+    }
+  ]
+}

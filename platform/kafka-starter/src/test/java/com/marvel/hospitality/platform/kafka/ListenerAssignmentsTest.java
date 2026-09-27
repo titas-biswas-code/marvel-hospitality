@@ -23,7 +23,8 @@ import org.springframework.kafka.listener.MessageListenerContainer;
         "spring.kafka.consumer.group-id=kafka-starter-test",
         "spring.kafka.consumer.auto-offset-reset=earliest",
         "marvel.kafka.retry.initial-interval=10ms",
-        "marvel.kafka.retry.max-interval=40ms"})
+        "marvel.kafka.retry.max-interval=40ms",
+        "management.tracing.sampling.probability=1.0"})
 @Import(SharedKafkaConfiguration.class)
 class ListenerAssignmentsTest {
 

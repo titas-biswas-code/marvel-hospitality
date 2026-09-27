@@ -21,6 +21,9 @@ import tools.jackson.databind.json.JsonMapper;
  * {@code JpaTransactionManager}'s transaction: both bind to the same {@code DataSource} connection tracked by
  * {@link TransactionSynchronizationManager}, so the insert commits or rolls back with everything else in the
  * transaction — no second resource, no XA, no extra round trip.
+ *
+ * <p>Each row also stores the {@code traceparent} of the work that wrote it (a request, a consumed message, a
+ * scheduled job), so one trace spans producer, CDC and consumer (ADR-0013).
  */
 public class OutboxEventWriter {
 
@@ -28,12 +31,15 @@ public class OutboxEventWriter {
     private final JsonMapper jsonMapper;
     private final Clock clock;
     private final String producer;
+    private final TraceparentSource traceparent;
 
-    public OutboxEventWriter(JdbcClient jdbcClient, JsonMapper jsonMapper, Clock clock, String producer) {
+    public OutboxEventWriter(JdbcClient jdbcClient, JsonMapper jsonMapper, Clock clock, String producer,
+            TraceparentSource traceparent) {
         this.jdbcClient = jdbcClient;
         this.jsonMapper = jsonMapper;
         this.clock = clock;
         this.producer = producer;
+        this.traceparent = traceparent;
     }
 
     /**
@@ -68,8 +74,8 @@ public class OutboxEventWriter {
                 .param("topic", message.topic())
                 .param("propertyId", message.propertyId(), Types.VARCHAR)
                 .param("producer", producer)
-                // Trace context propagation (outbox -> Kafka headers -> consumer) lands in PR-10 (observability).
-                .param("traceparent", null, Types.VARCHAR)
+                // Debezium copies it into the traceparent header; the consumer continues this trace (ADR-0013).
+                .param("traceparent", traceparent.currentTraceparent(), Types.VARCHAR)
                 .param("payload", payload)
                 .param("createdAt", OffsetDateTime.now(clock))
                 .update();

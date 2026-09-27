@@ -1,6 +1,7 @@
 package com.marvel.hospitality.payment.infrastructure.kafka;
 
 import com.marvel.hospitality.payment.application.ExecuteRefundUseCase;
+import com.marvel.hospitality.platform.observability.LoggingContext;
 import jakarta.validation.Valid;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
@@ -29,7 +30,13 @@ class RefundRequestedListener {
     // idIsGroup = false: the id names the container (tests look it up); the group stays spring.kafka.consumer.group-id.
     @KafkaListener(id = LISTENER_ID, idIsGroup = false, topics = TOPIC)
     void on(@Valid @Payload RefundRequestedMessage message, Acknowledgment ack) {
-        executeRefund.execute(message.toCommand());
-        ack.acknowledge();
+        try (LoggingContext ignored = LoggingContext.create()
+                .refundId(message.refundId())
+                .paymentId(message.paymentId())
+                .reservationId(message.reservationId())
+                .propertyId(message.propertyId())) {
+            executeRefund.execute(message.toCommand());
+            ack.acknowledge();
+        }
     }
 }

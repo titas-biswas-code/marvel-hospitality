@@ -9,6 +9,8 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.UUID;
+import io.micrometer.tracing.Span;
+import io.micrometer.tracing.Tracer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -21,7 +23,8 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  */
 @SpringBootTest(classes = TestApplication.class, properties = {
         "spring.application.name=outbox-test-app",
-        "spring.sql.init.mode=always"})
+        "spring.sql.init.mode=always",
+        "management.tracing.sampling.probability=1.0"})
 @Import(SharedPostgresConfiguration.class)
 class OutboxEventWriterTest {
 
@@ -33,6 +36,9 @@ class OutboxEventWriterTest {
 
     @Autowired
     JdbcClient jdbcClient;
+
+    @Autowired
+    Tracer tracer;
 
     @Test
     void writesRowWithRoutingColumnsAndJsonPayload() {
@@ -109,6 +115,43 @@ class OutboxEventWriterTest {
                 .query(String.class)
                 .single();
         assertThat(producer).isEqualTo("outbox-test-app");
+    }
+
+    @Test
+    void outboxRowStoresCurrentTraceparent() {
+        OutboxMessage message = new OutboxMessage("reservation", "P4145478-trace", "ReservationStatusChanged",
+                "reservation-status-changed", "AMS01", new TestPayload("P4145478", BigDecimal.ONE));
+        Span span = tracer.nextSpan().name("create-reservation").start();
+        UUID id;
+        try (Tracer.SpanInScope ignored = tracer.withSpan(span)) {
+            id = service.appendAndCommit(message);
+        } finally {
+            span.end();
+        }
+
+        String traceparent = jdbcClient.sql("SELECT traceparent FROM outbox_event WHERE id = :id")
+                .param("id", id)
+                .query(String.class)
+                .single();
+        // W3C trace context: version 00, the span's trace and span ids, then the flags. The flags byte is 03 with
+        // OTel 1.62 (sampled + the Level 2 "random trace id" bit), so only the sampled bit is asserted.
+        assertThat(traceparent).startsWith("00-" + span.context().traceId() + "-" + span.context().spanId() + "-");
+        int flags = Integer.parseInt(traceparent.substring(traceparent.lastIndexOf('-') + 1), 16);
+        assertThat(flags & 0x01).as("sampled flag").isEqualTo(1);
+    }
+
+    @Test
+    void outboxRowHasNullTraceparentOutsideAnySpan() {
+        OutboxMessage message = new OutboxMessage("reservation", "P4145478-no-trace", "ReservationStatusChanged",
+                "reservation-status-changed", "AMS01", new TestPayload("P4145478", BigDecimal.ONE));
+
+        UUID id = service.appendAndCommit(message);
+
+        Long withTraceparent = jdbcClient.sql("SELECT count(*) FROM outbox_event WHERE id = :id AND traceparent IS NOT NULL")
+                .param("id", id)
+                .query(Long.class)
+                .single();
+        assertThat(withTraceparent).isZero();
     }
 
     record TestPayload(String reservationId, BigDecimal totalAmount) {

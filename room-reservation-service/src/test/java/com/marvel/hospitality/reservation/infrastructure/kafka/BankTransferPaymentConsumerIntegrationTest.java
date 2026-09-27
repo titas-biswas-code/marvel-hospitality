@@ -24,6 +24,7 @@ import com.marvel.hospitality.reservation.domain.CancellationReason;
 import com.marvel.hospitality.reservation.domain.PaymentMatchOutcome;
 import com.marvel.hospitality.reservation.domain.PaymentMode;
 import com.marvel.hospitality.reservation.domain.ReceivedPayment;
+import com.marvel.hospitality.reservation.domain.RefundReason;
 import com.marvel.hospitality.reservation.domain.Reservation;
 import com.marvel.hospitality.reservation.domain.ReservationId;
 import com.marvel.hospitality.reservation.domain.ReservationIdGenerator;
@@ -199,6 +200,7 @@ class BankTransferPaymentConsumerIntegrationTest extends KafkaListenersIntegrati
     void paymentAfterCancellationRequestsFullRefund() {
         String reservationId = bankTransferReservation();
         cancel(reservationId);
+        double refundsBefore = refundRequestedCount(RefundReason.RESERVATION_CANCELLED);
 
         String paymentId = pay("240.00", "1401541457 " + reservationId);
         awaitPayment(paymentId);
@@ -209,6 +211,9 @@ class BankTransferPaymentConsumerIntegrationTest extends KafkaListenersIntegrati
         assertThat(reservation(reservationId)).containsEntry("status", "CANCELLED")
                 .containsEntry("amount_received", new BigDecimal("0.00"));
         assertRefundRequested(paymentId, reservationId, "240.00", "RESERVATION_CANCELLED");
+        // Counted by the listener just after the commit, so possibly a moment after the row is visible.
+        await().atMost(TIMEOUT).untilAsserted(() -> assertThat(refundRequestedCount(RefundReason.RESERVATION_CANCELLED))
+                .isEqualTo(refundsBefore + 1));
     }
 
     @Test
@@ -231,6 +236,7 @@ class BankTransferPaymentConsumerIntegrationTest extends KafkaListenersIntegrati
     @Test
     void overpaymentRequestsRefundOfSurplusInSameTransaction() {
         String reservationId = bankTransferReservation();
+        double refundsBefore = refundRequestedCount(RefundReason.OVERPAYMENT);
 
         String paymentId = pay("250.00", "1401541457 " + reservationId);
         awaitPayment(paymentId);
@@ -240,6 +246,8 @@ class BankTransferPaymentConsumerIntegrationTest extends KafkaListenersIntegrati
                 .containsEntry("amount_received", new BigDecimal("250.00"));
         assertThat(lastStatusEvent(reservationId).get("reason").asString()).isEqualTo("PAYMENT_RECEIVED");
         assertRefundRequested(paymentId, reservationId, "10.00", "OVERPAYMENT");
+        await().atMost(TIMEOUT).untilAsserted(() -> assertThat(refundRequestedCount(RefundReason.OVERPAYMENT))
+                .isEqualTo(refundsBefore + 1));
     }
 
     /**
@@ -515,6 +523,12 @@ class BankTransferPaymentConsumerIntegrationTest extends KafkaListenersIntegrati
     private double matchedCount(PaymentMatchOutcome outcome) {
         Counter counter = meterRegistry.find(BankTransferPaymentUpdateListener.MATCHED_METRIC)
                 .tag("outcome", outcome.name()).counter();
+        return counter == null ? 0 : counter.count();
+    }
+
+    private double refundRequestedCount(RefundReason reason) {
+        Counter counter = meterRegistry.find(BankTransferPaymentUpdateListener.REFUND_REQUESTED_METRIC)
+                .tag("reason", reason.name()).counter();
         return counter == null ? 0 : counter.count();
     }
 

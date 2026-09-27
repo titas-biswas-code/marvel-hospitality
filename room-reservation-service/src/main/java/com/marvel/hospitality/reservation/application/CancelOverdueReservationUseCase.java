@@ -1,5 +1,6 @@
 package com.marvel.hospitality.reservation.application;
 
+import com.marvel.hospitality.platform.observability.LoggingContext;
 import com.marvel.hospitality.reservation.domain.CancellationReason;
 import com.marvel.hospitality.reservation.domain.Money;
 import com.marvel.hospitality.reservation.domain.Reservation;
@@ -10,7 +11,6 @@ import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.slf4j.MDC;
 import org.springframework.transaction.support.TransactionOperations;
 
 /**
@@ -62,9 +62,9 @@ public class CancelOverdueReservationUseCase {
             return Optional.empty();
         }
         Reservation reservation = claimed.get();
-        try (MDC.MDCCloseable ignoredReservationId =
-                     MDC.putCloseable("reservationId", reservation.reservationId().value());
-                MDC.MDCCloseable ignoredPropertyId = MDC.putCloseable("propertyId", reservation.propertyId())) {
+        try (LoggingContext ignored = LoggingContext.create()
+                .reservationId(reservation.reservationId().value())
+                .propertyId(reservation.propertyId())) {
             reservation.cancel(CancellationReason.PAYMENT_DEADLINE_MISSED, clock);
             reservations.update(reservation);
             reservation.pullEvents().forEach(outbox::append);

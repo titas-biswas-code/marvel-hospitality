@@ -1,5 +1,6 @@
 package com.marvel.hospitality.reservation.application;
 
+import com.marvel.hospitality.platform.observability.LoggingContext;
 import com.marvel.hospitality.reservation.domain.ReceivedPayment;
 import com.marvel.hospitality.reservation.domain.Refund;
 import com.marvel.hospitality.reservation.domain.RefundDue;
@@ -40,8 +41,10 @@ public class RefundPolicy {
         Refund refund = Refund.request(UUID.randomUUID(), payment, due, Instant.now(clock));
         refunds.add(refund);
         refund.pullEvents().forEach(outbox::append);
-        log.info("Refund {} requested for payment {} of reservation {}: {} {} ({})", refund.refundId(),
-                payment.paymentId(), refund.reservationId(), refund.amount().amount().toPlainString(),
-                refund.amount().currency(), refund.reason());
+        try (LoggingContext ignored = LoggingContext.create().refundId(refund.refundId())) {
+            log.info("Refund {} requested for payment {} of reservation {}: {} {} ({})", refund.refundId(),
+                    payment.paymentId(), refund.reservationId(), refund.amount().amount().toPlainString(),
+                    refund.amount().currency(), refund.reason());
+        }
     }
 }

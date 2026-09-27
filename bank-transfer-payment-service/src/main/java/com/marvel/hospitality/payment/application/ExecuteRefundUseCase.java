@@ -3,13 +3,13 @@ package com.marvel.hospitality.payment.application;
 import com.marvel.hospitality.payment.domain.BankTransaction;
 import com.marvel.hospitality.payment.domain.RefundInstruction;
 import com.marvel.hospitality.payment.domain.RefundInstructionStatus;
+import com.marvel.hospitality.platform.observability.LoggingContext;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -60,10 +60,11 @@ public class ExecuteRefundUseCase {
 
     @Transactional
     public ExecuteRefundResult execute(ExecuteRefundCommand command) {
-        try (MDC.MDCCloseable ignoredRefundId = MDC.putCloseable("refundId", command.refundId().toString());
-                MDC.MDCCloseable ignoredPaymentId = MDC.putCloseable("paymentId", command.paymentId().toString());
-                MDC.MDCCloseable ignoredReservationId = MDC.putCloseable("reservationId", command.reservationId());
-                MDC.MDCCloseable ignoredPropertyId = MDC.putCloseable("propertyId", command.propertyId())) {
+        try (LoggingContext ignored = LoggingContext.create()
+                .refundId(command.refundId())
+                .paymentId(command.paymentId())
+                .reservationId(command.reservationId())
+                .propertyId(command.propertyId())) {
             if (!inbox.firstDelivery(command.refundId().toString())) {
                 log.debug("Refund {} already processed; duplicate delivery skipped", command.refundId());
                 return ExecuteRefundResult.duplicate();

@@ -3,6 +3,7 @@ package com.marvel.hospitality.payment;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.marvel.hospitality.platform.outbox.OutboxPurgeJob;
+import com.marvel.hospitality.platform.outbox.ReplicationSlotLagMonitor;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -35,6 +36,12 @@ class ApplicationContextLoadsTest {
         // platform/outbox-starter wires the daily purge job (MarvelOutboxAutoConfiguration) whenever a JdbcClient
         // bean exists; this service must not silently lose it (docs/contracts/outbox-and-inbox.md retention).
         assertThat(applicationContext.getBean(OutboxPurgeJob.class)).isNotNull();
+    }
+
+    @Test
+    void registersSlotLagMonitor() {
+        // platform/outbox-starter's debezium.slot.lag.bytes gauge (ADR-0007, ADR-0013) for this database's slot.
+        assertThat(applicationContext.getBean(ReplicationSlotLagMonitor.class)).isNotNull();
     }
 
     @Test

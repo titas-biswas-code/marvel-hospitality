@@ -29,6 +29,12 @@ class MarvelKafkaAutoConfigurationTest {
     }
 
     @Test
+    void contributesKafkaHealthIndicator() {
+        runner.run(context -> assertThat(context).hasBean("kafkaHealthIndicator")
+                .getBean("kafkaHealthIndicator").isInstanceOf(KafkaHealthIndicator.class));
+    }
+
+    @Test
     void serviceDefinedErrorHandlerWins() {
         runner.withBean(CommonErrorHandler.class, CommonLoggingErrorHandler::new)
                 .run(context -> {

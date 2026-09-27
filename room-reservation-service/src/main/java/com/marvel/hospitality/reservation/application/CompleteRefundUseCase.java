@@ -1,10 +1,10 @@
 package com.marvel.hospitality.reservation.application;
 
+import com.marvel.hospitality.platform.observability.LoggingContext;
 import com.marvel.hospitality.reservation.domain.Refund;
 import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.slf4j.MDC;
 import org.springframework.transaction.support.TransactionOperations;
 
 /**
@@ -46,8 +46,9 @@ public class CompleteRefundUseCase {
         }
         Refund refund = refunds.findById(command.refundId()).orElseThrow(() -> new IllegalArgumentException(
                 "refund-completed for unknown refund " + command.refundId()));
-        try (MDC.MDCCloseable reservation = MDC.putCloseable("reservationId", refund.reservationId().value());
-                MDC.MDCCloseable property = MDC.putCloseable("propertyId", refund.propertyId())) {
+        try (LoggingContext ignored = LoggingContext.create()
+                .reservationId(refund.reservationId().value())
+                .propertyId(refund.propertyId())) {
             requireMatches(refund, command);
             if (command.completed()) {
                 refund.complete(command.completedAt());

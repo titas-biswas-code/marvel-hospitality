@@ -60,7 +60,7 @@ clean: $(ENV_FILE)
 	$(COMPOSE) --profile apps down -v --remove-orphans
 	docker image rm -f $$($(COMPOSE) --profile apps config --images | grep '^marvel-hospitality/') 2>/dev/null || true
 
-# Wipes every volume (Postgres, Kafka, Keycloak) and starts again. Keycloak re-imports
+# Wipes every volume (Postgres, Kafka, Keycloak, otel-lgtm telemetry) and starts again. Keycloak re-imports
 # infra/keycloak/realm/marvel-realm.json only because its database is empty again.
 reset: $(ENV_FILE)
 	$(COMPOSE) --profile apps down -v --remove-orphans
