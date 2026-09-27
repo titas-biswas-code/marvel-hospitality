@@ -1,9 +1,9 @@
 package com.marvel.hospitality.reservation.domain;
 
 /**
- * How an incoming bank payment was matched to a reservation (ADR-0009). The matching logic itself lands in
- * PR-05; this PR only needs the type to exist as reference data (served via {@code GET /reference-data}) and
- * as the {@code received_payment.outcome} check constraint's set of values.
+ * How an incoming bank payment was matched to a reservation (ADR-0009): the result of {@link PaymentMatcher},
+ * served as reference data ({@code GET /reference-data}) and the set of values of the
+ * {@code received_payment.outcome} check constraint.
  */
 public enum PaymentMatchOutcome {
     MATCHED_PARTIAL,

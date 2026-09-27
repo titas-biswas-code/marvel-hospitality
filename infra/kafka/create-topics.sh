@@ -8,7 +8,7 @@ PARTITIONS="${TOPIC_PARTITIONS:-3}"
 REPLICATION="${TOPIC_REPLICATION_FACTOR:-1}"
 
 TOPICS=(
-  bank-transfer-payment-update   # name fixed by the brief
+  bank-transfer-payment-update   # name fixed by the external contract
   reservation-status-changed
   refund-requested
   refund-completed

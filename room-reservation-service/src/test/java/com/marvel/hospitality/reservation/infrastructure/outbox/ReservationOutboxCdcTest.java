@@ -66,8 +66,8 @@ class ReservationOutboxCdcTest {
         DebeziumCdc.createTopics(TOPIC);
         DebeziumCdc.registerConnector(CONNECTOR);
 
-        // RTM01 room 301 in 2032: no other test books it.
-        String reservationId = createReservation.create(new CreateReservationCommand("RTM01", "Ada Lovelace", "301",
+        // LIS01 room 301 in 2032: no other test books it.
+        String reservationId = createReservation.create(new CreateReservationCommand("LIS01", "Ada Lovelace", "301",
                         java.time.LocalDate.parse("2032-06-01"), java.time.LocalDate.parse("2032-06-03"),
                         RoomSegment.LARGE, PaymentMode.BANK_TRANSFER, null))
                 .reservation().reservationId().value();
@@ -83,7 +83,7 @@ class ReservationOutboxCdcTest {
         assertThat(header(headers, "eventType")).isEqualTo("ReservationStatusChanged");
         assertThat(header(headers, "eventVersion")).isEqualTo("1");
         assertThat(header(headers, "producer")).isEqualTo("room-reservation-service");
-        assertThat(header(headers, "propertyId")).isEqualTo("RTM01");
+        assertThat(header(headers, "propertyId")).isEqualTo("LIS01");
         assertThat(OffsetDateTime.parse(header(headers, "occurredAt")).toInstant())
                 .isEqualTo(((java.sql.Timestamp) row.get("created_at")).toInstant());
 
@@ -107,8 +107,8 @@ class ReservationOutboxCdcTest {
         Span span = tracer.nextSpan().name("create-reservation").start();
         String reservationId;
         try (Tracer.SpanInScope ignored = tracer.withSpan(span)) {
-            // RTM01 room 301 in 2033: no other test books it.
-            reservationId = createReservation.create(new CreateReservationCommand("RTM01", "Ada Lovelace", "301",
+            // LIS01 room 301 in 2033: no other test books it.
+            reservationId = createReservation.create(new CreateReservationCommand("LIS01", "Ada Lovelace", "301",
                             java.time.LocalDate.parse("2033-06-01"), java.time.LocalDate.parse("2033-06-03"),
                             RoomSegment.LARGE, PaymentMode.BANK_TRANSFER, null))
                     .reservation().reservationId().value();

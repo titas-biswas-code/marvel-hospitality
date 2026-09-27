@@ -61,7 +61,7 @@ CREATE TABLE reservation (
 );
 CREATE INDEX reservation_deadline_idx ON reservation (payment_deadline_at)
   WHERE status = 'PENDING_PAYMENT' AND payment_mode = 'BANK_TRANSFER';
--- V2 (PR-03): one confirmed card payment backs at most one reservation, across all properties (one card-payment
+-- V2: one confirmed card payment backs at most one reservation, across all properties (one card-payment
 -- service for the corporation). Violation -> 409 PAYMENT_REFERENCE_ALREADY_USED, mapped by index name.
 CREATE UNIQUE INDEX reservation_credit_card_payment_reference_uq ON reservation (payment_reference)
   WHERE payment_mode = 'CREDIT_CARD';
@@ -102,7 +102,7 @@ ALTER TABLE refund ADD CONSTRAINT refund_payment_id_key UNIQUE (payment_id);
 -- outbox_event, processed_message: see outbox-and-inbox.md
 ```
 Seed (Flyway `R__seed_reference_data.sql`, repeatable, idempotent upserts):
-- properties `AMS01` (Amsterdam, Europe/Amsterdam, NL00MARV0000000001), `RTM01` (Rotterdam, Europe/Amsterdam, NL00MARV0000000002)
+- properties `AMS01` (Amsterdam, Europe/Amsterdam, NL00MARV0000000001), `LIS01` (Lisbon, Europe/Lisbon, PT50MARV0000000000002)
 - rooms per property: `101`,`102` SMALL; `201`,`202` MEDIUM; `301` LARGE; `401` EXTRA_LARGE
 - rates per property: SMALL 80, MEDIUM 120, LARGE 180, EXTRA_LARGE 260 (EUR)
 

@@ -4,7 +4,7 @@
 
 INSERT INTO property (id, name, timezone, bank_account_number) VALUES
   ('AMS01', 'Marvel Amsterdam', 'Europe/Amsterdam', 'NL00MARV0000000001'),
-  ('RTM01', 'Marvel Rotterdam', 'Europe/Amsterdam', 'NL00MARV0000000002')
+  ('LIS01', 'Marvel Lisbon', 'Europe/Lisbon', 'PT50MARV0000000000002')
 ON CONFLICT (id) DO UPDATE SET
   name = EXCLUDED.name,
   timezone = EXCLUDED.timezone,
@@ -20,7 +20,7 @@ FROM (VALUES
   ('301', 'LARGE'),
   ('401', 'EXTRA_LARGE')
 ) AS r(room_number, segment)
-CROSS JOIN (VALUES ('AMS01'), ('RTM01')) AS p(id)
+CROSS JOIN (VALUES ('AMS01'), ('LIS01')) AS p(id)
 ON CONFLICT (property_id, room_number) DO UPDATE SET
   segment = EXCLUDED.segment;
 
@@ -32,7 +32,7 @@ FROM (VALUES
   ('LARGE', 180.00),
   ('EXTRA_LARGE', 260.00)
 ) AS rt(segment, nightly_rate)
-CROSS JOIN (VALUES ('AMS01'), ('RTM01')) AS p(id)
+CROSS JOIN (VALUES ('AMS01'), ('LIS01')) AS p(id)
 ON CONFLICT (property_id, segment) DO UPDATE SET
   nightly_rate = EXCLUDED.nightly_rate,
   currency = EXCLUDED.currency;

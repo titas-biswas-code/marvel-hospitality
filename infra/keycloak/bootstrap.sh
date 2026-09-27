@@ -193,9 +193,9 @@ human_user() {
 }
 
 # bank:read lets staff look up a bank transaction in the payment ledger (GET /bank-transactions/{paymentId}).
-human_user alice Alice Anderson '["AMS01","RTM01"]' reservation:read reservation:write bank:read
+human_user alice Alice Anderson '["AMS01","LIS01"]' reservation:read reservation:write bank:read
 human_user bob   Bob   Brown    '["AMS01"]'         reservation:read reservation:write bank:read
-human_user carol Carol Clark    '["RTM01"]'         reservation:read bank:read
+human_user carol Carol Clark    '["LIS01"]'         reservation:read bank:read
 
 # Service accounts operate on every property.
 for client in bank-simulator room-reservation-service bank-transfer-payment-service; do

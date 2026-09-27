@@ -10,8 +10,8 @@ import org.jspecify.annotations.Nullable;
  * @param eventType the outbox {@code event_type}; becomes the {@code eventType} Kafka header
  * @param eventVersion the outbox {@code event_version}; start new event types at {@code 1}
  * @param topic the routing target read by Debezium's Outbox Event Router (ADR-0007)
- * @param propertyId the {@code propertyId} column/header; {@code null} only for the bank topic, which the brief
- *        defines without a {@code propertyId} (ADR-0002)
+ * @param propertyId the {@code propertyId} column/header; {@code null} only for the bank topic, whose external
+ *        contract has no a {@code propertyId} (ADR-0002)
  * @param payload the event body; serialised to the {@code payload} jsonb column as-is
  */
 public record OutboxMessage(

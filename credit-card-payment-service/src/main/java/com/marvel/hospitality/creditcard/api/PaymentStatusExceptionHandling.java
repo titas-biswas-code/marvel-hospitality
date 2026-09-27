@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  * a missing/blank {@code paymentReference} ({@link MethodArgumentNotValidException}, from {@code @NotBlank})
  * or a body that is not readable JSON at all ({@link HttpMessageNotReadableException}, including a missing
  * body). Kept as the spec's own {@link ErrorResponse} shape, not {@code ProblemDetail} — this service's
- * contract is the provided OpenAPI spec, not marvel-hospitality's own error convention.
+ * contract is the provider's OpenAPI spec, not marvel-hospitality's own error convention.
  */
 @RestControllerAdvice
 class PaymentStatusExceptionHandling {

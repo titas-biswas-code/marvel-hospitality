@@ -107,7 +107,7 @@ if [[ -n "$EXTRA" ]]; then
   fi
 fi
 
-TOKEN="$("$SCRIPT_DIR/user-token.sh" "$USER_NAME")"
+TOKEN="$(bash "$SCRIPT_DIR/user-token.sh" "$USER_NAME")"
 
 HTTP_RESPONSE="$(curl -s -w '\n%{http_code}' -X GET \
   "$RESERVATION_URL/properties/$PROPERTY/reservations/$RESERVATION" \
@@ -153,7 +153,7 @@ else
 fi
 
 if [[ ${#PASSTHROUGH[@]} -gt 0 ]]; then
-  "$SCRIPT_DIR/post-bank-transaction.sh" --reservation "$RESERVATION" --amount "$PAY_AMOUNT" "${PASSTHROUGH[@]}"
+  bash "$SCRIPT_DIR/post-bank-transaction.sh" --reservation "$RESERVATION" --amount "$PAY_AMOUNT" "${PASSTHROUGH[@]}"
 else
-  "$SCRIPT_DIR/post-bank-transaction.sh" --reservation "$RESERVATION" --amount "$PAY_AMOUNT"
+  bash "$SCRIPT_DIR/post-bank-transaction.sh" --reservation "$RESERVATION" --amount "$PAY_AMOUNT"
 fi

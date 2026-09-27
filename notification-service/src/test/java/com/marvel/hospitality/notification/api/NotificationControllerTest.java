@@ -62,7 +62,7 @@ class NotificationControllerTest {
     @Test
     void hidesNotificationsOfPropertiesNotInToken() throws Exception {
         String reservationId = newReservationId();
-        seed(reservationId, "RTM01", "RESERVATION_CONFIRMED", "2026-10-01T09:15:04Z");
+        seed(reservationId, "LIS01", "RESERVATION_CONFIRMED", "2026-10-01T09:15:04Z");
 
         mvc.perform(get("/notifications").param("reservationId", reservationId).with(reader("AMS01")))
                 .andExpect(status().isOk())

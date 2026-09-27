@@ -78,15 +78,15 @@ class MarvelSecurityAutoConfigurationTest {
 
     @Test
     void roleMismatchIsForbidden() throws Exception {
-        expectProblem(mvc.perform(get(SecuredTestController.PATH, "RTM01").with(jwt()
+        expectProblem(mvc.perform(get(SecuredTestController.PATH, "LIS01").with(jwt()
                         .authorities(authorities("reservation:read"))
-                        .jwt(j -> j.claim("properties", List.of("RTM01"))))),
+                        .jwt(j -> j.claim("properties", List.of("LIS01"))))),
                 403, "FORBIDDEN");
     }
 
     @Test
     void propertyNotInClaimIsForbiddenProperty() throws Exception {
-        expectProblem(mvc.perform(get(SecuredTestController.PATH, "RTM01").with(jwt()
+        expectProblem(mvc.perform(get(SecuredTestController.PATH, "LIS01").with(jwt()
                         .authorities(authorities("reservation:write"))
                         .jwt(j -> j.claim("properties", List.of("AMS01"))))),
                 403, "FORBIDDEN_PROPERTY");
@@ -103,11 +103,11 @@ class MarvelSecurityAutoConfigurationTest {
 
     @Test
     void wildcardPropertyAllowsAnyProperty() throws Exception {
-        mvc.perform(get(SecuredTestController.PATH, "RTM01").with(jwt()
+        mvc.perform(get(SecuredTestController.PATH, "LIS01").with(jwt()
                         .authorities(authorities("reservation:write"))
                         .jwt(j -> j.claim("properties", List.of("*")))))
                 .andExpect(status().isOk())
-                .andExpect(content().string("RTM01"));
+                .andExpect(content().string("LIS01"));
     }
 
     @Test

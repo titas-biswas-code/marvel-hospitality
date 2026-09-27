@@ -1,9 +1,9 @@
 # ADR-0004 Reservation state machine in code; statuses persisted as text; reference-data endpoint
 
-Status: Accepted · Date: 2026-09-26
+Status: Accepted · Date: 2026-09-26 · Corrected: 2026-09-27 (traceability check: text aligned with the code)
 
 ## Context
-Statuses `PENDING_PAYMENT`, `CONFIRMED`, `CANCELLED` are fixed by the brief. A future UI should not
+Statuses `PENDING_PAYMENT`, `CONFIRMED`, `CANCELLED` are fixed by the business process. A future UI should not
 hardcode them. Someone asked whether statuses should be configurable or DB-driven.
 
 ## Decision
@@ -16,8 +16,8 @@ hardcode them. Someone asked whether statuses should be configurable or DB-drive
   PENDING_PAYMENT -> CANCELLED         payment deadline missed
   anything else   -> IllegalStateTransitionException
   ```
-  `Reservation.confirm(clock)`, `Reservation.cancel(reason, clock)`, `Reservation.recordPayment(amount)`
-  are the only mutators; each records a domain event the application layer turns into outbox rows.
+  `Reservation.confirm(clock)`, `Reservation.cancel(reason, clock)`, `Reservation.recordPartialPayment(amount, clock)`
+  and `Reservation.confirmPayment(amount, clock)` are the only mutators; each records a domain event the application layer turns into outbox rows.
 - Persisted as `varchar` with a `CHECK`; never ordinal; never a DB enum type.
 - `GET /reference-data` returns all enum values via `Enum.values()` so any UI seeds itself from the
   service. Adding a value is a code change + migration widening the `CHECK`, on purpose.

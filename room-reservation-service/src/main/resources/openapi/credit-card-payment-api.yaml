@@ -1,7 +1,7 @@
-# CORRECTED copy of the provided credit-card-payment-service spec. Two identical copies exist: the provider's
+# CORRECTED copy of the card provider's published credit-card-payment-service spec. Two identical copies exist: the provider's
 # (credit-card-payment-service/src/main/resources/openapi/, served by the stub) and the consumer's
 # (room-reservation-service/src/main/resources/openapi/, the generated client is built from it). Change both together;
-# `make check-contracts` fails if they differ. The spec as provided is kept unchanged in
+# `make check-contracts` fails if they differ. The spec as published is kept unchanged in
 # docs/contracts/credit-card-payment-api.original.yaml, so every difference below can be checked with a plain diff.
 # Nothing here changes a request or response on the wire: the path, the JSON field names and the status codes are
 # the provider's.

@@ -10,10 +10,10 @@ TOKEN_USER := $(if $(filter command line,$(origin USER)),$(USER),alice)
 PASSWORD   ?= password
 CLIENT     ?= bank-simulator
 
-.PHONY: help build-all test-all check-contracts up up-apps down clean logs reset reset-apps token client-token replay-dlt
+.PHONY: help build-all test-all check-contracts up up-apps down clean logs reset reset-apps token client-token replay-dlt smoke shell
 
 help:
-	@echo "build-all | test-all | check-contracts | up | up-apps | down | clean | logs | reset | reset-apps | token USER=alice | client-token CLIENT=bank-simulator | replay-dlt TOPIC=bank-transfer-payment-update [MAX=N] [DRY_RUN=1]"
+	@echo "build-all | test-all | check-contracts | up | up-apps | down | clean | logs | reset | reset-apps | smoke | shell | token USER=alice | client-token CLIENT=bank-simulator | replay-dlt TOPIC=bank-transfer-payment-update [MAX=N] [DRY_RUN=1]"
 
 # The credit-card spec exists twice on purpose: the provider's copy (served by the stub) and the consumer's copy (the
 # reservation service generates its client from it). Each service builds from its own file; this keeps them identical.
@@ -58,7 +58,7 @@ logs: $(ENV_FILE)
 # infra/.env is kept. The next `make up-apps` starts from scratch, as on a fresh clone.
 clean: $(ENV_FILE)
 	$(COMPOSE) --profile apps down -v --remove-orphans
-	docker image rm -f $$($(COMPOSE) --profile apps config --images | grep '^marvel-hospitality/') 2>/dev/null || true
+	docker image rm -f $$($(COMPOSE) --profile apps --profile tools config --images | grep '^marvel-hospitality/') 2>/dev/null || true
 
 # Wipes every volume (Postgres, Kafka, Keycloak, otel-lgtm telemetry) and starts again. Keycloak re-imports
 # infra/keycloak/realm/marvel-realm.json only because its database is empty again.
@@ -87,3 +87,12 @@ client-token: $(ENV_FILE)
 replay-dlt:
 	@if [ -z "$(TOPIC)" ]; then echo "usage: make replay-dlt TOPIC=<topic> [MAX=N] [DRY_RUN=1]" >&2; exit 1; fi
 	./scripts/replay-dlt.sh $(TOPIC) $(if $(MAX),--max $(MAX)) $(if $(DRY_RUN),--dry-run)
+
+# End-to-end smoke test against the running stack (make up-apps first): the README's 5-minute demo with assertions.
+smoke: $(ENV_FILE)
+	infra/e2e/smoke.sh
+
+# A shell with bash, curl, jq, make and python3 in the `tools` container (infra/tools): for hosts without those
+# tools. localhost:<port> inside it reaches the services, so the README's commands work unchanged.
+shell: $(ENV_FILE)
+	$(COMPOSE) --profile tools run --rm tools bash

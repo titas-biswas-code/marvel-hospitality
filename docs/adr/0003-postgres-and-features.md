@@ -1,6 +1,6 @@
 # ADR-0003 PostgreSQL, database-per-service, Flyway, and the Postgres features we lean on
 
-Status: Accepted · Date: 2026-09-26
+Status: Accepted · Date: 2026-09-26 · Corrected: 2026-09-27 (traceability check: text aligned with the code)
 
 ## Context
 We need transactional integrity for outbox/inbox patterns, a hard guarantee against double-booking,
@@ -17,7 +17,7 @@ deliberately, instead of writing application code:
 | Derived stay range / nights | `GENERATED ALWAYS AS ... STORED` columns | reservation |
 | 30-day rule as a second line of defence | `CHECK (end_date - start_date <= 30)` | reservation |
 | Inbox idempotency in one round trip | `INSERT ... ON CONFLICT DO NOTHING RETURNING` | all consumers |
-| Multi-instance safe batch jobs | `SELECT ... FOR UPDATE SKIP LOCKED` | scheduler, purge |
+| Multi-instance safe batch jobs | `SELECT ... FOR UPDATE SKIP LOCKED` | auto-cancel scheduler (the outbox purge needs no lock: its time-based `DELETE` is idempotent) |
 | Change data capture | logical decoding (`wal_level=logical`, `pgoutput` publication) | Debezium (ADR-0007) |
 | Raw/opaque payloads | `jsonb` | outbox payload, bank raw record |
 | Status columns | `varchar` + `CHECK`, **not** Postgres `ENUM` types | everywhere |

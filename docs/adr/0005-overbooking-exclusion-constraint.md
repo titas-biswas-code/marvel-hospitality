@@ -3,8 +3,8 @@
 Status: Accepted · Date: 2026-09-26
 
 ## Context
-Two concurrent requests for the same room and overlapping nights must not both succeed. The brief
-does not mention it, but "production-ready" does. Optimistic locking cannot help: on insert there is
+Two concurrent requests for the same room and overlapping nights must not both succeed. No requirement
+states it explicitly, but a production-ready booking system cannot do without it. Optimistic locking cannot help: on insert there is
 no row to version. Application-level checks (`SELECT` then `INSERT`) race unless serialised.
 
 ## How an exclusion constraint works

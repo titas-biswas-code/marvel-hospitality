@@ -22,8 +22,8 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * This test replicates docs/contracts/events.md's {@code bank-transfer-payment-update} example on purpose (the
- * human's rule: every test owns its own data, even if that duplicates a doc). {@link PaymentReceivedPayload} is
+ * This test replicates docs/contracts/events.md's {@code bank-transfer-payment-update} example on purpose
+ * (every test owns its own data, even if that duplicates a doc). {@link PaymentReceivedPayload} is
  * serialised with the application's own {@link JsonMapper} bean (same context as the other {@code @SpringBootTest}s
  * in this service), so the real Jackson configuration ({@code spring.jackson.write.write-bigdecimal-as-plain},
  * ADR-0016) is exercised, not a hand-built mapper.

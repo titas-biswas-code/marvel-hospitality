@@ -1,16 +1,17 @@
 # ADR-0001 Monorepo of independently deployable services, cross-cutting code in platform starters
 
-Status: Accepted · Date: 2026-09-26 · Amended: 2026-09-26 (PR-01, see "Amendment")
+Status: Accepted · Date: 2026-09-26 · Amended: 2026-09-26 (see "Amendment") · Corrected: 2026-09-27 (traceability check: text aligned with the code)
 
 ## Context
-The brief asks for one Spring Boot service (`room-reservation-service`) and names two collaborators
-(`credit-card-payment-service` via REST, an event broker topic `bank-transfer-payment-update`). To
-demonstrate an event-driven system end to end we also build the producer of that topic and a
-notification consumer. Reviewers should be able to clone one repo and run everything.
+The core of the system is one Spring Boot service (`room-reservation-service`) with two collaborators whose
+interfaces are fixed externally: `credit-card-payment-service` via REST, and the event topic
+`bank-transfer-payment-update`. To run the event-driven flow end to end we also build the producer of that topic
+and a notification consumer. Anyone trying or developing the system should be able to clone one repository and run
+everything.
 
 ## Decision
-- One Git repository `marvel-hospitality`. Folder names follow the brief verbatim where the brief names
-  a service. One `docker-compose.yml` under `infra/` runs all dependencies and all services.
+- One Git repository `marvel-hospitality`. Folder names are the service names used in the
+  external contracts. One `docker-compose.yml` under `infra/` runs all dependencies and all services.
 - Each service is a **standalone Gradle project** (own wrapper, `settings.gradle`, `build.gradle`,
   Groovy DSL) with its own Dockerfile. No root build, no parent BOM beyond Spring Boot's own. Each service
   can be built, tested, versioned and deployed alone.
@@ -35,21 +36,23 @@ notification consumer. Reviewers should be able to clone one repo and run everyt
   for platform code. Accepted locally; publishing versioned starters restores independence and is the
   production path.
 - Starters must stay small and backwards compatible; a breaking change is a new major version.
-- Contract drift between services is still possible; mitigated by contract docs, a JSON schema check in tests
-  (PR-04), and the end-to-end compose smoke test (PR-11).
+- Contract drift between services is still possible; mitigated by contract docs, tests that compare
+  each event payload with the contract's example (fixtures in each service's `src/test/resources/contracts/`), the
+  `make check-contracts` comparison of the two credit-card spec copies, and the end-to-end compose smoke test
+  (`infra/e2e/smoke.sh`).
 
-## Amendment (PR-01)
+## Amendment
 The original decision duplicated cross-cutting classes per service (marked `// platform-candidate`) and named
-a versioned platform library as the next step "once a third consumer appears". PR-01 produced that third
+a versioned platform library as the next step "once a third consumer appears". The security work produced that third
 consumer immediately: the security code was ~10 identical classes in three services, and the outbox, inbox and
-Kafka error handling of later PRs would repeat the pattern. Duplication made each copy harder to review and
+Kafka error handling that followed would repeat the pattern. Duplication made each copy harder to review and
 to keep identical, so the library was introduced now, built from source to keep the one-clone experience.
 
 ## Alternatives considered
 - Duplicate per service (the original decision): no coupling at all, but N copies to review and keep in sync;
   superseded as described above.
-- Versioned library published to GitHub Packages / Maven local: truest independence, but a reviewer's clean
+- Versioned library published to GitHub Packages / Maven local: truest independence, but a clean
   clone would need a publish step or registry credentials first; kept as the production path.
 - Gradle multi-project with a shared `common` module and one root build: couples every service into one build
   and invites a grab-bag module; rejected.
-- Polyrepo: correct for a real organisation, hostile to a reviewer with one link; rejected.
+- Polyrepo: correct for a real organisation, hostile to anyone who wants the whole system from one link; rejected.

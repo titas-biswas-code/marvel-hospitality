@@ -1,0 +1,142 @@
+# Continuous integration. Independent jobs, run in parallel:
+#   contracts      - the two copies of the credit-card spec are identical (make check-contracts)
+#   build          - `./gradlew build` of platform/ and of each service on its own (ADR-0001); Testcontainers uses the
+#                    runner's Docker, so every unit, integration, Kafka, CDC and Keycloak test runs here as it does locally
+#   e2e            - the whole stack via make, then infra/e2e/smoke.sh on the host (the README's 5-minute demo)
+#   e2e-powershell - the same through scripts/windows/marvel.ps1 (PowerShell 7) and the `tools` container
+#   windows        - a default Windows checkout keeps scripts LF; marvel.cmd runs in Windows PowerShell 5.1; lint.
+#                    (GitHub's Windows runners cannot run Linux containers, so the stack itself is not started there.)
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contracts:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - run: make check-contracts
+
+  build:
+    name: build (${{ matrix.project }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        # platform/ is listed on its own: a service build compiles the starters it uses but does not run their tests.
+        project:
+          - platform
+          - room-reservation-service
+          - bank-transfer-payment-service
+          - credit-card-payment-service
+          - notification-service
+    defaults:
+      run:
+        working-directory: ${{ matrix.project }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 25
+      # `basic` = the MIT-licensed cache provider on top of actions/cache (the default provider is a commercial library).
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
+      - run: ./gradlew build --console=plain
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-reports-${{ matrix.project }}
+          path: ${{ matrix.project }}/build/reports/tests/
+          if-no-files-found: ignore
+
+  e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      # The stack's images (Kafka, Connect, Keycloak, otel-lgtm, Postgres, four service builds) need more disk than
+      # a fresh runner leaves free; drop preinstalled SDKs this job never uses.
+      - name: Free disk space
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL && df -h /
+      - name: Start the stack (infra + services, connectors registered)
+        run: make up-apps
+      - name: Smoke test
+        run: infra/e2e/smoke.sh
+      - name: Stack state and logs
+        if: failure()
+        run: |
+          docker compose -f infra/docker-compose.yml --env-file infra/.env --profile apps ps -a
+          docker compose -f infra/docker-compose.yml --env-file infra/.env --profile apps logs --no-color --tail=300
+
+  e2e-powershell:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v7
+      - name: Free disk space
+        shell: bash
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL && df -h /
+      - name: Start the stack
+        run: ./scripts/windows/marvel.ps1 up-apps
+      - name: Smoke test (tools container)
+        run: ./scripts/windows/marvel.ps1 smoke
+      - name: Arguments pass through (token, simulator with spaces, replay-dlt flags)
+        run: |
+          $token = ./scripts/windows/marvel.ps1 token bob
+          if ($LASTEXITCODE -ne 0 -or $token -notmatch '^ey') { throw "no token: $token" }
+          ./scripts/windows/marvel.ps1 sim post-bank-transaction.sh --description 'hello bank' --amount 10
+          if ($LASTEXITCODE -ne 0) { throw 'sim failed' }
+          ./scripts/windows/marvel.ps1 replay-dlt bank-transfer-payment-update --max 1 --dry-run
+          if ($LASTEXITCODE -ne 0) { throw 'replay-dlt failed' }
+      - name: Stack state and logs
+        if: failure()
+        run: |
+          docker compose -f infra/docker-compose.yml --env-file infra/.env --profile apps ps -a
+          docker compose -f infra/docker-compose.yml --env-file infra/.env --profile apps logs --no-color --tail=300
+
+  windows:
+    runs-on: windows-2025
+    steps:
+      # Runner default core.autocrlf=true, like a fresh Git for Windows install: .gitattributes must still give LF.
+      - uses: actions/checkout@v7
+      - name: Scripts keep LF line endings in a Windows checkout
+        shell: pwsh
+        run: |
+          $lf = @('infra/kafka/create-topics.sh', 'infra/connect-init/register-connectors.sh',
+                  'infra/postgres/init/01-databases.sh', 'infra/tools/entrypoint.sh', 'infra/e2e/smoke.sh',
+                  'room-reservation-service/gradlew', 'room-reservation-service/Dockerfile')
+          foreach ($f in $lf) {
+            if ([System.IO.File]::ReadAllBytes($f) -contains 13) { throw "$f has CRLF line endings" }
+          }
+          if (-not ([System.IO.File]::ReadAllBytes('marvel.cmd') -contains 13)) { throw 'marvel.cmd should be CRLF' }
+          'line endings ok'
+      - name: marvel.cmd under Windows PowerShell 5.1
+        shell: cmd
+        run: |
+          call marvel.cmd help || exit /b 1
+          call marvel.cmd check-contracts || exit /b 1
+      - name: Lint marvel.ps1
+        shell: pwsh
+        run: |
+          Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+          $findings = Invoke-ScriptAnalyzer -Path scripts/windows/marvel.ps1 -Settings scripts/windows/PSScriptAnalyzerSettings.psd1
+          $findings | Format-Table -AutoSize
+          if ($findings) { throw "$(@($findings).Count) PSScriptAnalyzer findings" }

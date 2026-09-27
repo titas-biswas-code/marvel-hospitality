@@ -133,7 +133,7 @@ if [[ -z "$DESCRIPTION" ]]; then
   DESCRIPTION="${E2E} ${RESERVATION}"
 fi
 
-TOKEN="$("$SCRIPT_DIR/token.sh")"
+TOKEN="$(bash "$SCRIPT_DIR/token.sh")"
 
 BODY="$(jq -n \
   --arg ref "$REF" \

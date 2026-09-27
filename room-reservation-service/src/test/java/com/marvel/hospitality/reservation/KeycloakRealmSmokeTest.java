@@ -73,7 +73,7 @@ class KeycloakRealmSmokeTest {
 
         assertThat(whoami.username()).isEqualTo("alice");
         assertThat(whoami.roles()).contains("reservation:read", "reservation:write", "bank:read");
-        assertThat(whoami.properties()).containsExactly("AMS01", "RTM01");
+        assertThat(whoami.properties()).containsExactly("AMS01", "LIS01");
     }
 
     @Test

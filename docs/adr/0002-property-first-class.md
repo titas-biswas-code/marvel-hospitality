@@ -3,7 +3,7 @@
 Status: Accepted · Date: 2026-09-26
 
 ## Context
-The brief mentions "payments received on hotels account" (plural hotels) and room numbers, which are
+Payments arrive on the hotels' accounts (several hotels), and rooms are identified by room numbers, which are
 only unique within a hotel. Marvel is one corporation operating several properties; this is **not**
 a multi-tenant SaaS. Staff such as regional managers or a central booking desk legitimately act on
 more than one property.
@@ -15,7 +15,7 @@ more than one property.
   `/properties/{propertyId}/reservations`. It identifies the resource being acted on.
 - The JWT carries a `properties` claim listing the properties the caller may act on. Authorization is
   `path.propertyId ∈ token.properties` (or `*`). This is the *entitlement*, not the target.
-- Every event our services produce carries `propertyId` in value and header. The brief-defined bank
+- Every event our services produce carries `propertyId` in value and header. The externally defined bank
   topic cannot (the bank does not know Marvel's org chart), so `reservationId` must be globally unique
   across properties (see contracts/identifiers.md).
 - We deliberately do not use the word *tenant* anywhere in code.
@@ -29,5 +29,5 @@ more than one property.
 - Property from a custom JWT claim only, forwarded by a gateway in a header: right for single-tenant
   SaaS users, wrong here because a user with N properties cannot express "this request is for
   property X" through a claim. Also see ADR-0012 on trusting forwarded headers.
-- Global room ids (UUID per room, no property): loses the natural key the brief uses ("Room Number")
+- Global room ids (UUID per room, no property): loses the natural key the business uses (the room number)
   and hides the multi-property nature of the business; rejected.

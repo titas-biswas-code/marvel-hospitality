@@ -3,7 +3,7 @@
 All services: JSON, `ProblemDetail` errors (RFC 9457) with `type = https://marvel-hospitality/problems/<code>`
 and extension property `code`. Swagger UI at `/swagger-ui.html`, OpenAPI at `/v3/api-docs`.
 Actuator `/actuator/health` (liveness+readiness groups), `/actuator/prometheus` if enabled.
-All business endpoints require a bearer JWT (from PR-01 onwards).
+All business endpoints require a bearer JWT.
 
 ## room-reservation-service (port 8080)
 
@@ -211,7 +211,7 @@ Implements the corrected spec (`credit-card-payment-service/src/main/resources/o
 - prefix `SLOW`→ sleeps 5 s then 200 `CONFIRMED` (drives the timeout test)
 - prefix `ERR` → 500
 - otherwise    → 404
-No auth (the brief's spec has none; noted in ADR-0011).
+No auth (the provider's spec has none; noted in ADR-0011).
 
 ## notification-service (port 8082)
 ### GET /notifications?reservationId=P4145478  role `reservation:read`

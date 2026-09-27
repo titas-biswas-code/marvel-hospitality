@@ -3,7 +3,7 @@
 Status: Accepted · Date: 2026-09-26
 
 ## Context
-The brief is silent on authentication. Production-ready means every business endpoint is protected and
+The requirements are silent on authentication. Production-ready means every business endpoint is protected and
 users are scoped to the properties they may operate.
 
 ## Decision
