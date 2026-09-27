@@ -987,6 +987,54 @@
             }
           ],
           "response": []
+        },
+        {
+          "name": "12. Notifications of the reservation",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{notification_url}}/notifications?reservationId={{reservationId}}",
+              "host": [
+                "{{notification_url}}"
+              ],
+              "path": [
+                "notifications"
+              ],
+              "query": [
+                {
+                  "key": "reservationId",
+                  "value": "{{reservationId}}"
+                }
+              ]
+            },
+            "description": "alice's token is still current from step 9. Expects RESERVATION_CREATED_PENDING_PAYMENT, PARTIAL_PAYMENT_RECEIVED and RESERVATION_CONFIRMED, oldest first. Notifications arrive asynchronously (reservation outbox -> Debezium -> reservation-status-changed on Kafka -> notification-service), so like steps 6 and 10 this request retries for up to ~10 s before asserting."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = [\"RESERVATION_CREATED_PENDING_PAYMENT\", \"PARTIAL_PAYMENT_RECEIVED\", \"RESERVATION_CONFIRMED\"];",
+                  "const attempt = Number(pm.environment.get(\"demo_attempt\") || 0);",
+                  "const json = pm.response.json();",
+                  "const templates = Array.isArray(json) ? json.map((n) => n.template) : [];",
+                  "const done = templates.length >= expected.length;",
+                  "if (!done && attempt < 10) {",
+                  "    pm.environment.set(\"demo_attempt\", attempt + 1);",
+                  "    setTimeout(() => {}, 1000);",
+                  "    pm.execution.setNextRequest(pm.info.requestName);",
+                  "} else {",
+                  "    pm.environment.unset(\"demo_attempt\");",
+                  "    pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "    pm.test(\"templates are \" + expected.join(\", \"), () => pm.expect(templates).to.eql(expected));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
         }
       ]
     },
@@ -2013,6 +2061,149 @@
             }
           ],
           "response": []
+        },
+        {
+          "name": "Notifications",
+          "item": [
+            {
+              "name": "List notifications of a reservation",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{notification_url}}/notifications?reservationId={{reservationId}}",
+                  "host": [
+                    "{{notification_url}}"
+                  ],
+                  "path": [
+                    "notifications"
+                  ],
+                  "query": [
+                    {
+                      "key": "reservationId",
+                      "value": "{{reservationId}}"
+                    }
+                  ]
+                },
+                "description": "Notifications rendered for the reservation, oldest first, filtered to the properties in the caller's token (reservation:read). Run a 'Create ...' reservation request in room-reservation-service's Reservations folder (or the Demo folder) first so reservationId is set. Notifications are produced asynchronously (reservation outbox -> Debezium -> reservation-status-changed on Kafka -> notification-service), so run this again after a moment if the list looks incomplete."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "const json = pm.response.json();",
+                      "",
+                      "pm.test(\"body is an array\", function () {",
+                      "    pm.expect(json).to.be.an(\"array\");",
+                      "});",
+                      "",
+                      "json.forEach((notification) => {",
+                      "    pm.test(\"each notification has string template and renderedText\", function () {",
+                      "        pm.expect(notification.template).to.be.a(\"string\").and.not.empty;",
+                      "        pm.expect(notification.renderedText).to.be.a(\"string\").and.not.empty;",
+                      "    });",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "response": []
+            },
+            {
+              "name": "List notifications without reservationId → 400 VALIDATION_FAILED",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{notification_url}}/notifications",
+                  "host": [
+                    "{{notification_url}}"
+                  ],
+                  "path": [
+                    "notifications"
+                  ]
+                },
+                "description": "Missing the required reservationId query parameter: expects 400 ProblemDetail, code VALIDATION_FAILED."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 400\", function () {",
+                      "    pm.response.to.have.status(400);",
+                      "});",
+                      "",
+                      "pm.test(\"Content-Type is application/problem+json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+                      "});",
+                      "",
+                      "const json = pm.response.json();",
+                      "",
+                      "pm.test(\"code is VALIDATION_FAILED\", function () {",
+                      "    pm.expect(json.code).to.eql(\"VALIDATION_FAILED\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "response": []
+            },
+            {
+              "name": "List notifications without reservation:read → 403",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{notification_url}}/notifications?reservationId={{reservationId}}",
+                  "host": [
+                    "{{notification_url}}"
+                  ],
+                  "path": [
+                    "notifications"
+                  ],
+                  "query": [
+                    {
+                      "key": "reservationId",
+                      "value": "{{reservationId}}"
+                    }
+                  ]
+                },
+                "description": "Run 'Get token (bank-simulator, client credentials)' from the Auth folder first: the bank-simulator service account only has bank:ingest and bank:read, no reservation:read. Expects 403 ProblemDetail, code FORBIDDEN."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 403\", function () {",
+                      "    pm.response.to.have.status(403);",
+                      "});",
+                      "",
+                      "pm.test(\"Content-Type is application/problem+json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+                      "});",
+                      "",
+                      "const json = pm.response.json();",
+                      "",
+                      "pm.test(\"code is FORBIDDEN\", function () {",
+                      "    pm.expect(json.code).to.eql(\"FORBIDDEN\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "response": []
+            }
+          ]
         }
       ]
     },

@@ -34,6 +34,15 @@ the stub (command in its description) to see the connection-failure path instead
 directly, without a token (the spec declares no security, ADR-0011); it uses the `credit_card_url` environment
 variable.
 
+`notification-service`'s **Notifications** folder needs `reservation:read`, and only shows notifications of the
+properties in the token (alice has both; bob only AMS01, carol only RTM01). It reads `reservationId` from the
+environment, same as the reservation folder above — run a "Create ..." reservation request first. "List notifications
+without reservationId → 400 VALIDATION_FAILED" needs only any valid token. "List notifications without
+reservation:read → 403" needs a token that lacks the role: run "Get token (bank-simulator, client credentials)" from
+**Auth** first (bank-simulator only has `bank:ingest` and `bank:read`). Notifications are produced asynchronously
+(reservation outbox → Debezium → Kafka → notification-service), so a freshly booked reservation may show an empty or
+short list until that catches up.
+
 ## Demo: bank transfer paid in two parts
 
 The folder **"Demo: bank transfer paid in two parts"** is the payment-matching flow end to end, meant for the Collection
@@ -45,12 +54,14 @@ reads) and the bank-simulator (pays) by itself:
 2. The bank pays 120.00 with remittance `1401541457 <reservationId>` → the reservation is still `PENDING_PAYMENT`,
    `amountReceived` 120.00.
 3. The bank pays the other 120.00 → `CONFIRMED`, 240.00; `…/payments` lists `MATCHED_PARTIAL` then `MATCHED_FULL`.
+4. `notification-service`'s `/notifications` lists this reservation's notifications, oldest first:
+   `RESERVATION_CREATED_PENDING_PAYMENT`, `PARTIAL_PAYMENT_RECEIVED`, `RESERVATION_CONFIRMED`.
 
 Payments are applied asynchronously (outbox → Debezium → Kafka → reservation service), so the two reservation checks
-retry for up to ~10 s instead of assuming a fixed delay. The **Unmatched payments** folder lists payments that could
-not be applied: `GET /unmatched-payments` needs `bank:read` (alice, bob, carol have it) and shows payments that name
-no known reservation; `GET /properties/AMS01/unmatched-payments` shows the property's payments that arrived after a
-reservation was cancelled or already paid.
+and the notifications check retry for up to ~10 s instead of assuming a fixed delay. The **Unmatched payments** folder
+lists payments that could not be applied: `GET /unmatched-payments` needs `bank:read` (alice, bob, carol have it) and
+shows payments that name no known reservation; `GET /properties/AMS01/unmatched-payments` shows the property's
+payments that arrived after a reservation was cancelled or already paid.
 
 ## Newman (CLI)
 
