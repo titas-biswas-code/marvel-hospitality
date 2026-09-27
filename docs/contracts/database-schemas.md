@@ -150,5 +150,7 @@ CREATE TABLE notification (
   rendered_text  text         NOT NULL,
   created_at     timestamptz  NOT NULL
 );
+-- V2: GET /notifications?reservationId= (oldest first) reads by reservation.
+CREATE INDEX notification_reservation_idx ON notification (reservation_id, created_at);
 -- processed_message
 ```

@@ -17,7 +17,8 @@ Local environment (Postgres, Kafka, Debezium, Keycloak, Grafana): see `infra/REA
 | Payment matching: the reservation service consumes the bank topic idempotently; partial payments add up, the full amount confirms, every payment is stored with its outcome (ADR-0009). Technical failures are retried, then dead-lettered to `<topic>.DLT` (ADR-0008); watch `kafka.dlt.messages` and replay with `make replay-dlt TOPIC=…` (needs `python3`). Payments that name no known reservation are **not** refunded automatically: they wait in `GET /unmatched-payments` so a typo can still be reconciled by a person | done |
 | Auto-cancel: bank-transfer reservations still `PENDING_PAYMENT` at their deadline — local midnight two days before arrival in the property's timezone — are cancelled by a job that is safe with any number of instances (per-row `FOR UPDATE SKIP LOCKED`) and after restarts (the deadline is data); a status event carries reason `PAYMENT_DEADLINE_MISSED`; a payment arriving afterwards is kept as `UNMATCHED_NOT_PENDING` (ADR-0010) | done |
 | Refunds (the saga's compensation, ADR-0006): an overpayment's surplus, or a payment that arrives after cancellation or on a paid reservation, becomes a refund request in the same transaction as the payment; the payment service pays it back to the original debtor account (stub rail: accounts starting with `FAIL` are rejected) and answers on `refund-completed`. Both consumers are idempotent on `refundId`. Payment rows show their refund's status; `GET /refunds/{refundId}` on the payment service. A failed refund is logged at ERROR and counted (`refund.failed`) for a person to act on | done |
-| Notifications, observability | next |
+| Notifications: `notification-service` consumes `reservation-status-changed` idempotently (inbox on the event's header `id`), renders one message per status change (booking with bank-transfer instructions, partial payment with the remaining amount, confirmation, cancellation after a missed deadline; anything else is stored as `UNKNOWN`) and logs it; `GET /notifications?reservationId=` lists them | done |
+| Observability | next |
 
 ## Run it
 
@@ -28,20 +29,50 @@ git clone https://github.com/titas-biswas-code/marvel-hospitality.git && cd marv
 make up-apps     # creates infra/.env from .env.example, builds the services, starts everything, registers the CDC connectors
 ```
 
-The first run takes a few minutes (image builds). Then:
+The first run takes a few minutes (image builds). Then try the core flow from the shell: book a bank transfer, let
+"the bank" pay it, see it confirmed and the customer notified.
 
-- Postman: import `docs/postman/` (collection + environment) and run the folder **"Demo: bank transfer paid in two
-  parts"**: book, pay half (still `PENDING_PAYMENT`), pay the rest (`CONFIRMED`). See `docs/postman/README.md`.
-- Swagger UI per service, e.g. http://localhost:8080/swagger-ui.html, or all of them at http://localhost:8088.
-- Pay as "the bank" from the shell: `bank-transfer-simulator/` (see its README). To see a refund, overpay:
-  `bank-transfer-simulator/scripts/pay-in-full.sh --property AMS01 --reservation <id> --extra 10`, then the
-  reservation's payments show the surplus refund going `REQUESTED` → `COMPLETED`.
+```
+TOKEN=$(make -s token)                                                   # alice: AMS01 + RTM01
+ID=$(curl -s -X POST http://localhost:8080/properties/AMS01/reservations \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"customerName":"Ada Lovelace","roomNumber":"202","startDate":"2031-05-10","endDate":"2031-05-12",
+       "roomSegment":"MEDIUM","paymentMode":"BANK_TRANSFER"}' | jq -r .reservationId)
+bank-transfer-simulator/scripts/pay-in-full.sh --property AMS01 --reservation "$ID"    # the bank pays 240.00
+sleep 2                                                                  # outbox → Debezium → Kafka → consumers
+curl -s http://localhost:8080/properties/AMS01/reservations/$ID -H "Authorization: Bearer $TOKEN" | jq .status
+curl -s "http://localhost:8082/notifications?reservationId=$ID" -H "Authorization: Bearer $TOKEN" | jq -r '.[].template'
+docker compose -f infra/docker-compose.yml logs notification-service | grep "$ID"
+```
+
+Expect `"CONFIRMED"`, then `RESERVATION_CREATED_PENDING_PAYMENT` and `RESERVATION_CONFIRMED`. (Running it again with
+the same dates answers `409 ROOM_UNAVAILABLE`: change the dates.)
 
 ```
 make down        # stop everything, keep the data
 make clean       # remove containers, volumes (all data) and the built images; the next `make up-apps` starts from scratch
 make reset-apps  # wipe all data and start everything again, rebuilt (e.g. after pulling an edited migration)
 ```
+
+## Demos
+
+Every feature has a Postman folder that runs on its own in the Collection Runner (or newman), fetches its own tokens,
+creates its own data on random dates and can be re-run any number of times. Import `docs/postman/` (collection +
+environment); details in [docs/postman/README.md](docs/postman/README.md). Swagger UI: each service's
+`/swagger-ui.html`, or all of them at http://localhost:8088.
+
+| Feature | Postman folder | From the shell |
+|---|---|---|
+| Payment matching: a bank transfer paid in two parts (`PENDING_PAYMENT` → `CONFIRMED`) and its three notifications | Demo: bank transfer paid in two parts | the core flow above |
+| Booking rules: overbooking (409), wrong property (403), segment mismatch, bank-transfer lead time, card reference reused (409), card rejected (422) | Demo: booking rules | — |
+| Unmatched payments: unknown reservation or unreadable description, kept for a person, not refunded | Demo: unmatched payments | `post-bank-transaction.sh --description 'hello bank' --amount 10` |
+| Refunds: an overpayment's surplus, money for an already paid reservation, a refund the bank rejects | Demo: refunds | `pay-in-full.sh --property AMS01 --reservation <id> --extra 10` (add `--debtor FAIL00000000000001` for a rejected refund) |
+| Notifications for cash and card bookings; the property filter | Demo: notifications | `curl …/notifications?reservationId=<id>` as above |
+| Auto-cancel at the payment deadline | — (needs the stored deadline moved) | [Auto-cancel → See it happen](#see-it-happen) |
+| CDC durability: stop Kafka Connect, lose nothing | — | [docs/cdc-durability-demo.md](docs/cdc-durability-demo.md) |
+| Dead letters: inspect and replay | — | `make replay-dlt TOPIC=<topic> DRY_RUN=1` |
+
+The simulator scripts live in `bank-transfer-simulator/scripts/` ([README](bank-transfer-simulator/README.md)).
 
 ## Auto-cancel
 
@@ -87,6 +118,15 @@ curl -s http://localhost:8080/properties/AMS01/reservations/$ID -H "Authorizatio
 The demo edits the stored deadline instead of changing a setting. The deadline is always a local midnight, so no
 "days before start" value could bring the first cancellation closer than the next midnight. Editing the row does
 what the passing of time would do.
+
+## Notifications
+
+Every `reservation-status-changed` event becomes one stored, rendered notification, handed to a channel after its
+transaction commits. The only channel logs the text at INFO (`reservationId` and `propertyId` in the MDC); nothing is
+sent to a customer. The event carries no contact details (e-mail, phone) and no bank account number, so the booking
+message points to the booking confirmation for the account to pay into. A real system would look the customer's contact
+details and the property's account up by reservation before sending, and would add a delivery status plus a retrying
+sender so a crash between storing and sending cannot lose a message.
 
 ## Further reading
 

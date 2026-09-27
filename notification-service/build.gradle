@@ -32,6 +32,12 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-kafka'
     // JWT resource server, role + property authorization, 401/403 ProblemDetail, /whoami (platform/security-starter).
     implementation "com.marvel.hospitality:marvel-security-spring-boot-starter:${marvelPlatformVersion}"
+    // ProblemDetail fallback advice, VALIDATION_FAILED shape (platform/problem-starter).
+    implementation "com.marvel.hospitality:marvel-problem-spring-boot-starter:${marvelPlatformVersion}"
+    // processed_message inbox: dedupe every consumed message in the transaction of its effect (ADR-0006).
+    implementation "com.marvel.hospitality:marvel-inbox-spring-boot-starter:${marvelPlatformVersion}"
+    // Manual ack, ErrorHandlingDeserializer, blocking retries, <topic>.DLT, kafka.dlt.messages (ADR-0008).
+    implementation "com.marvel.hospitality:marvel-kafka-spring-boot-starter:${marvelPlatformVersion}"
     implementation "org.springdoc:springdoc-openapi-starter-webmvc-ui:${springdocVersion}"
     implementation 'org.flywaydb:flyway-database-postgresql'
     runtimeOnly 'org.postgresql:postgresql'
@@ -43,6 +49,13 @@ dependencies {
     testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
     testImplementation 'org.testcontainers:testcontainers-postgresql'
     testImplementation 'org.testcontainers:testcontainers-kafka'
+    // Waiting on asynchronous effects (Kafka consumption) without Thread.sleep; version from the Boot BOM.
+    testImplementation 'org.awaitility:awaitility'
+    // Shared Postgres/Kafka containers and Kafka test helpers (platform/outbox-starter test fixtures). This service
+    // has no outbox; the fixtures also put the outbox starter on the test classpath, where it stays unused.
+    testImplementation testFixtures("com.marvel.hospitality:marvel-outbox-spring-boot-starter:${marvelPlatformVersion}")
+    // ListenerAssignments: wait until every listener owns its partitions (platform/kafka-starter test fixtures).
+    testImplementation testFixtures("com.marvel.hospitality:marvel-kafka-spring-boot-starter:${marvelPlatformVersion}")
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
