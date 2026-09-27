@@ -2,6 +2,7 @@ package com.marvel.hospitality.notification.infrastructure.kafka;
 
 import com.marvel.hospitality.notification.application.RecordNotificationCommand;
 import com.marvel.hospitality.notification.application.RecordNotificationUseCase;
+import com.marvel.hospitality.platform.observability.LoggingContext;
 import jakarta.validation.Valid;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
@@ -41,8 +42,12 @@ class ReservationStatusChangedListener {
     @KafkaListener(id = LISTENER_ID, idIsGroup = false, topics = TOPIC)
     void on(@Valid @Payload ReservationStatusChangedMessage message, ConsumerRecord<String, String> record,
             Acknowledgment ack) {
-        recordNotification.record(new RecordNotificationCommand(eventId(record), message.toNotice()));
-        ack.acknowledge();
+        try (LoggingContext ignored = LoggingContext.create()
+                .reservationId(message.reservationId())
+                .propertyId(message.propertyId())) {
+            recordNotification.record(new RecordNotificationCommand(eventId(record), message.toNotice()));
+            ack.acknowledge();
+        }
     }
 
     /**

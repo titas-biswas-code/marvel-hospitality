@@ -45,6 +45,8 @@ import com.marvel.hospitality.reservation.domain.ReservationStatus;
 import com.marvel.hospitality.reservation.domain.Room;
 import com.marvel.hospitality.reservation.domain.RoomSegment;
 import com.marvel.hospitality.reservation.domain.RoomSegmentMismatchException;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -67,6 +69,7 @@ import org.springframework.test.web.servlet.MvcResult;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
@@ -76,7 +79,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
  * {@code SecurityWiringTest}/{@code SecurityWebMvcSliceTest}).
  */
 @WebMvcTest(controllers = {ReservationController.class, ReferenceDataController.class})
-@Import({ReservationProblemAdvice.class, MockJwtDecoderConfiguration.class})
+// SimpleMeterRegistry: the slice has no metrics auto-configuration; the controller counts reservation.created.
+@Import({ReservationProblemAdvice.class, MockJwtDecoderConfiguration.class, SimpleMeterRegistry.class})
 class ReservationControllerTest {
 
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-09-26T10:00:00Z"), ZoneOffset.UTC);
@@ -87,6 +91,9 @@ class ReservationControllerTest {
 
     @Autowired
     private MockMvc mvc;
+
+    @Autowired
+    private MeterRegistry meterRegistry;
 
     @MockitoBean
     private CreateReservationUseCase createReservationUseCase;
@@ -167,6 +174,40 @@ class ReservationControllerTest {
         assertThat(body).contains("\"amountReceived\":0.00");
         assertThat(body).contains("\"paymentDeadlineAt\":null");
         assertThat(body).contains("\"bankTransferInstructions\":null");
+    }
+
+    @Test
+    void countsCreatedReservationByModeAndStatus() throws Exception {
+        given(createReservationUseCase.create(any())).willReturn(bankTransferReservation());
+        double before = createdCount("BANK_TRANSFER", "PENDING_PAYMENT");
+
+        mvc.perform(post("/properties/AMS01/reservations").with(writeJwt())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validCashRequestJson()))
+                .andExpect(status().isCreated());
+
+        assertThat(createdCount("BANK_TRANSFER", "PENDING_PAYMENT")).isEqualTo(before + 1);
+    }
+
+    @Test
+    void doesNotCountRejectedReservation() throws Exception {
+        willThrow(new RoomUnavailableException("AMS01", "101", new RuntimeException("23P01")))
+                .given(createReservationUseCase).create(any());
+        double before = meterRegistry.find("reservation.created").counters().stream().mapToDouble(c -> c.count()).sum();
+
+        mvc.perform(post("/properties/AMS01/reservations").with(writeJwt())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validCashRequestJson()))
+                .andExpect(status().isConflict());
+
+        assertThat(meterRegistry.find("reservation.created").counters().stream().mapToDouble(c -> c.count()).sum())
+                .isEqualTo(before);
+    }
+
+    private double createdCount(String paymentMode, String status) {
+        var counter = meterRegistry.find("reservation.created")
+                .tag("paymentMode", paymentMode).tag("status", status).tag("propertyId", "AMS01").counter();
+        return counter == null ? 0 : counter.count();
     }
 
     @Test

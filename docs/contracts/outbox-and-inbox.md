@@ -55,8 +55,8 @@ headers to every message; the headers above are the whole contract).
   normalises whitespace and key order; consumers parse JSON, they never compare bytes.)
 - `id` is automatically emitted as header `id` by the SMT; we treat `id` and `eventId` as synonyms
   (consumers read `id`).
-- A `null` column placed as a header (e.g. `property_id` on the bank topic, `traceparent` until PR-10) yields the
-  header **with a null value**; it is not omitted. `created_at` renders as an ISO-8601 UTC string.
+- A `null` column placed as a header (e.g. `property_id` on the bank topic, or `traceparent` on a row written
+  outside any trace, e.g. rows from before PR-10) yields the header **with a null value**; it is not omitted. `created_at` renders as an ISO-8601 UTC string.
 - `snapshot.mode=initial`: rows written before a connector is first registered are published by its initial
   snapshot (the router treats snapshot reads like inserts). `skipped.operations=u,d,t`: the outbox is insert-only,
   and the purge job's deletes must never reach the router.

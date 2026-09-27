@@ -1,6 +1,7 @@
 package com.marvel.hospitality.payment.application;
 
 import com.marvel.hospitality.payment.domain.BankTransaction;
+import com.marvel.hospitality.platform.observability.LoggingContext;
 import java.time.Clock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,22 +40,26 @@ public class IngestBankTransactionUseCase {
                 command.currency(), command.remittanceInformation(), command.bookedAt(), clock.instant());
 
         if (ledger.addIfAbsent(received, command.raw())) {
-            outbox.paymentReceived(received);
-            log.info("Ingested bank transaction {} as payment {}", received.bankTransactionRef(), received.paymentId());
+            try (LoggingContext ignored = LoggingContext.create().paymentId(received.paymentId())) {
+                outbox.paymentReceived(received);
+                log.info("Ingested bank transaction {} as payment {}", received.bankTransactionRef(), received.paymentId());
+            }
             return new IngestResult(received, true);
         }
 
         BankTransaction existing = ledger.findByBankTransactionRef(received.bankTransactionRef())
                 .orElseThrow(() -> new IllegalStateException(
                         "bankTransactionRef " + received.bankTransactionRef() + " conflicted but is not in the ledger"));
-        if (existing.describesSameTransferAs(received)) {
-            log.debug("Duplicate bank transaction {} (payment {}); nothing stored",
-                    existing.bankTransactionRef(), existing.paymentId());
-        } else {
-            // The contract says a repeated reference returns the existing payment; a different body under the same
-            // reference is a bank-side error worth a human's attention, but not a reason to book money twice.
-            log.warn("Bank transaction {} repeated with different details; kept the original payment {}",
-                    existing.bankTransactionRef(), existing.paymentId());
+        try (LoggingContext ignored = LoggingContext.create().paymentId(existing.paymentId())) {
+            if (existing.describesSameTransferAs(received)) {
+                log.debug("Duplicate bank transaction {} (payment {}); nothing stored",
+                        existing.bankTransactionRef(), existing.paymentId());
+            } else {
+                // The contract says a repeated reference returns the existing payment; a different body under the
+                // same reference is a bank-side error worth a human's attention, but not a reason to book money twice.
+                log.warn("Bank transaction {} repeated with different details; kept the original payment {}",
+                        existing.bankTransactionRef(), existing.paymentId());
+            }
         }
         return new IngestResult(existing, false);
     }

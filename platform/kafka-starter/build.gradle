@@ -13,12 +13,18 @@ dependencies {
     // kafka.dlt.messages{topic} (ADR-0008, ADR-0013); recorded only when the service has a MeterRegistry.
     api 'io.micrometer:micrometer-core'
 
+    // KafkaHealthIndicator; present in every service through spring-boot-starter-actuator.
+    compileOnly 'org.springframework.boot:spring-boot-health'
+
     annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
 
     // ListenerAssignments: shared by every service's listener integration tests.
     testFixturesImplementation 'org.awaitility:awaitility'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-health'
+    // A real OTel-bridged tracer, to see a listener continue the trace of a record's traceparent header.
+    testImplementation 'org.springframework.boot:spring-boot-starter-opentelemetry'
     testImplementation 'org.springframework.boot:spring-boot-testcontainers'
     testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
     testImplementation 'org.awaitility:awaitility'

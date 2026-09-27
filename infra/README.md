@@ -28,7 +28,7 @@ make reset-apps                # the same, then rebuilds and starts the services
 | kafka-ui | http://localhost:8090 | web UI, also shows Kafka Connect connectors |
 | Kafka Connect REST | http://localhost:8083 | Debezium connectors `reservation-outbox`, `payment-outbox` (`/connectors?expand=status`) |
 | Keycloak | http://localhost:8180 | admin console at `/admin`, login `admin`/`admin`. Management/health port 9000 is **not** published to the host. |
-| Grafana (otel-lgtm) | http://localhost:3000 | OTLP ingest on 4317 (gRPC) / 4318 (HTTP). Not wired into any service until PR-10. |
+| Grafana (otel-lgtm) | http://localhost:3000 | Traces (Tempo), logs (Loki), metrics (Prometheus); dashboard "Marvel Hospitality". OTLP ingest on 4317 (gRPC) / 4318 (HTTP). |
 | room-reservation-service | 8080 | app service, added under compose profile `apps` from PR-01 |
 | bank-transfer-payment-service | 8081 | app service, added under compose profile `apps` from PR-01 |
 | credit-card-payment-service | 9090 | app service, added under compose profile `apps` in PR-03 |
@@ -77,8 +77,10 @@ make reset-apps                # the same, then rebuilds and starts the services
   already exist** (see "Reset" below). See `infra/keycloak/README.md` for how the realm file is produced
   and how to get tokens.
 
-- **otel-lgtm** (`grafana/otel-lgtm:0.34.0`): Grafana + Loki + Tempo + Prometheus bundle, OTLP receiver.
-  Not consumed by any service until observability is wired up in PR-10.
+- **otel-lgtm** (`grafana/otel-lgtm:0.34.0`): Grafana + Loki + Tempo + Prometheus bundle, OTLP receiver
+  (ADR-0013). Every app service pushes traces, metrics and logs to `http://otel-lgtm:4318` (their `local`
+  profile; override with `OTLP_ENDPOINT`). The image provisions its data sources itself;
+  `infra/grafana/` adds the "Marvel Hospitality" dashboard. No service depends on it being up.
 
 Every long-running container above has a Docker healthcheck; `kafka-init` and `connect-init` are the
 exceptions and are expected to exit successfully rather than stay healthy.
@@ -152,6 +154,10 @@ Each connector owns a logical replication slot in Postgres (`reservation_outbox`
 connector is stopped, Postgres keeps the WAL its slot still needs, so events are delayed, not lost. The retained
 WAL is capped by `max_slot_wal_keep_size=1GB`: past that, Postgres **invalidates** the slot (to protect its disk)
 and the connector can no longer resume from it.
+
+The reservation and payment services publish that lag every 30 s as the gauge `debezium.slot.lag.bytes{slot}`
+(ADR-0013): in Grafana, the "Marvel Hospitality" dashboard's slot-lag panel, or Prometheus
+`debezium_slot_lag_bytes`. A value that only grows means a connector is not consuming. By hand:
 
 ```
 # lag per slot (bytes of WAL not yet confirmed by the connector)

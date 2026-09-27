@@ -48,6 +48,8 @@ dependencies {
     implementation "com.marvel.hospitality:marvel-inbox-spring-boot-starter:${marvelPlatformVersion}"
     // Manual ack, ErrorHandlingDeserializer, blocking retries, <topic>.DLT, kafka.dlt.messages (ADR-0008).
     implementation "com.marvel.hospitality:marvel-kafka-spring-boot-starter:${marvelPlatformVersion}"
+    // OpenTelemetry traces, metrics and logs over OTLP to otel-lgtm; LoggingContext for MDC ids (ADR-0013).
+    implementation "com.marvel.hospitality:marvel-observability-spring-boot-starter:${marvelPlatformVersion}"
     implementation "org.springdoc:springdoc-openapi-starter-webmvc-ui:${springdocVersion}"
     implementation 'org.flywaydb:flyway-database-postgresql'
     runtimeOnly 'org.postgresql:postgresql'

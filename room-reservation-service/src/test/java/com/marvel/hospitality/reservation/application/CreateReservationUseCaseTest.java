@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willAnswer;
 import static org.mockito.BDDMockito.willDoNothing;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.mock;
@@ -12,6 +13,9 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.marvel.hospitality.reservation.domain.BankTransferPaymentModeHandler;
 import com.marvel.hospitality.reservation.domain.CashPaymentModeHandler;
 import com.marvel.hospitality.reservation.domain.CreditCardPaymentModeHandler;
@@ -33,6 +37,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
@@ -40,6 +45,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 import org.springframework.transaction.support.TransactionCallback;
@@ -95,6 +102,37 @@ class CreateReservationUseCaseTest {
         verify(outbox).append(event.capture());
         assertThat(event.getValue().previousStatus()).isNull();
         assertThat(event.getValue().status()).isEqualTo(ReservationStatus.PENDING_PAYMENT);
+    }
+
+    @Test
+    void mdcCarriesReservationIdThroughUseCase() {
+        // Log capture on the use case's own logger (ADR-0013: every line of the work carries the ids).
+        Logger logger = (Logger) LoggerFactory.getLogger(CreateReservationUseCase.class);
+        ListAppender<ILoggingEvent> logs = new ListAppender<>();
+        logs.start();
+        logger.addAppender(logs);
+        Map<String, String> mdcWhileWritingOutbox = new HashMap<>();
+        willAnswer(invocation -> {
+            mdcWhileWritingOutbox.putAll(MDC.getCopyOfContextMap());
+            return null;
+        }).given(outbox).append(any(ReservationStatusChanged.class));
+        try {
+            ReservationView view = useCase.create(command(PaymentMode.CASH));
+
+            String reservationId = view.reservation().reservationId().value();
+            assertThat(mdcWhileWritingOutbox)
+                    .containsEntry("propertyId", "AMS01")
+                    .containsEntry("reservationId", reservationId);
+            assertThat(logs.list)
+                    .filteredOn(event -> event.getFormattedMessage().equals("Reservation created"))
+                    .singleElement()
+                    .satisfies(event -> assertThat(event.getMDCPropertyMap())
+                            .containsEntry("propertyId", "AMS01")
+                            .containsEntry("reservationId", reservationId));
+            assertThat(MDC.getCopyOfContextMap()).as("nothing left behind on the thread").isNullOrEmpty();
+        } finally {
+            logger.detachAppender(logs);
+        }
     }
 
     @Test

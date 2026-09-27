@@ -6,9 +6,17 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 
 /**
  * @param retry the blocking retry policy applied before a record is dead-lettered (ADR-0008)
+ * @param health the {@code kafka} health indicator (ADR-0013 readiness)
  */
 @ConfigurationProperties("marvel.kafka")
-public record MarvelKafkaProperties(@DefaultValue Retry retry) {
+public record MarvelKafkaProperties(@DefaultValue Retry retry, @DefaultValue Health health) {
+
+    /**
+     * @param timeout how long the broker may take to answer before the service reports {@code kafka} DOWN; shorter
+     *        than the compose healthcheck's own timeout (5s), so a slow broker shows as DOWN rather than a hung probe
+     */
+    public record Health(@DefaultValue("3s") Duration timeout) {
+    }
 
     /**
      * Defaults are ADR-0008's: 5 attempts in total, waiting 1s, 2s, 4s, 8s in between (capped at 30s), so a poison

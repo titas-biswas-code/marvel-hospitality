@@ -1,12 +1,12 @@
 package com.marvel.hospitality.reservation.infrastructure.kafka;
 
+import com.marvel.hospitality.platform.observability.LoggingContext;
 import com.marvel.hospitality.reservation.application.CompleteRefundResult;
 import com.marvel.hospitality.reservation.application.CompleteRefundUseCase;
 import com.marvel.hospitality.reservation.domain.RefundStatus;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.validation.Valid;
-import org.slf4j.MDC;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.messaging.handler.annotation.Payload;
@@ -41,7 +41,7 @@ class RefundCompletedListener {
     // idIsGroup = false: the id names the container (tests look it up); the group stays spring.kafka.consumer.group-id.
     @KafkaListener(id = LISTENER_ID, idIsGroup = false, topics = TOPIC)
     void on(@Valid @Payload RefundCompletedMessage message, Acknowledgment ack) {
-        try (MDC.MDCCloseable ignored = MDC.putCloseable("paymentId", message.paymentId())) {
+        try (LoggingContext ignored = LoggingContext.create().paymentId(message.paymentId()).refundId(message.refundId())) {
             CompleteRefundResult result = completeRefund.complete(message.toCommand());
             ack.acknowledge();
             if (result.status() == RefundStatus.FAILED) {

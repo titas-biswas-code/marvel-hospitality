@@ -18,7 +18,7 @@ Local environment (Postgres, Kafka, Debezium, Keycloak, Grafana): see `infra/REA
 | Auto-cancel: bank-transfer reservations still `PENDING_PAYMENT` at their deadline — local midnight two days before arrival in the property's timezone — are cancelled by a job that is safe with any number of instances (per-row `FOR UPDATE SKIP LOCKED`) and after restarts (the deadline is data); a status event carries reason `PAYMENT_DEADLINE_MISSED`; a payment arriving afterwards is kept as `UNMATCHED_NOT_PENDING` (ADR-0010) | done |
 | Refunds (the saga's compensation, ADR-0006): an overpayment's surplus, or a payment that arrives after cancellation or on a paid reservation, becomes a refund request in the same transaction as the payment; the payment service pays it back to the original debtor account (stub rail: accounts starting with `FAIL` are rejected) and answers on `refund-completed`. Both consumers are idempotent on `refundId`. Payment rows show their refund's status; `GET /refunds/{refundId}` on the payment service. A failed refund is logged at ERROR and counted (`refund.failed`) for a person to act on | done |
 | Notifications: `notification-service` consumes `reservation-status-changed` idempotently (inbox on the event's header `id`), renders one message per status change (booking with bank-transfer instructions, partial payment with the remaining amount, confirmation, cancellation after a missed deadline; anything else is stored as `UNKNOWN`) and logs it; `GET /notifications?reservationId=` lists them | done |
-| Observability | next |
+| Observability: one trace per saga across services, Kafka and Debezium (the outbox row stores the `traceparent`); JSON logs with `traceId`, `reservationId`, `paymentId`, `refundId`, `propertyId`, shipped to Loki; business metrics and the Debezium slot-lag gauge in Prometheus; all in one Grafana (`otel-lgtm`, ADR-0013). Readiness includes the database and Kafka | done |
 
 ## Run it
 
@@ -127,6 +127,43 @@ sent to a customer. The event carries no contact details (e-mail, phone) and no 
 message points to the booking confirmation for the account to pay into. A real system would look the customer's contact
 details and the property's account up by reservation before sending, and would add a delivery status plus a retrying
 sender so a crash between storing and sending cannot lose a message.
+
+## Observability
+
+Every service sends traces, metrics and logs over OTLP to one container, `otel-lgtm` (ADR-0013). Grafana:
+**http://localhost:3000** (no login), dashboard *Marvel Hospitality* (reservations by status, payments by outcome,
+refunds, DLT count, Debezium slot lag, p95 latency). Locally every request is traced (sampling 1.0).
+
+**One saga, one trace.** A trace does not stop at Kafka: each outbox row stores the `traceparent` of the work that
+wrote it, Debezium copies it into the Kafka header, and the consumer's span continues that trace. A bank payment is
+therefore a single trace: the bank's `POST /bank-transactions` → the reservation service applying it → the
+notification, and for an overpayment the refund in the payment service and its completion back in the reservation
+service. (The booking itself is a separate trace: the request that created it.)
+
+**Find the saga of one reservation** after running the flow in *Run it* (`$ID` from there):
+
+1. Grafana → *Explore* → **Loki**, code mode:
+   ```
+   {service_name=~".+"} | reservationId="<your $ID>"
+   ```
+   Every log line about that reservation, from every service. Log lines also carry `propertyId`, and `paymentId` /
+   `refundId` where known, as fields to filter on.
+2. Expand a line of the payment ("Payment … OVERPAID" / "CONFIRMED") and click **Trace: …** next to `trace_id`: Tempo
+   opens the whole saga as one waterfall across `bank-transfer-payment-service`, `room-reservation-service` and
+   `notification-service`.
+3. From any span, **Logs for this span** jumps back to Loki for that trace.
+
+The same ids are in the console JSON (`docker compose -f infra/docker-compose.yml logs room-reservation-service`):
+`traceId`, `spanId`, `reservationId`, `propertyId`, … on every line.
+
+**Metrics** (Grafana → *Explore* → **Prometheus**; dots become underscores, counters get `_total`):
+`reservation_created_total{paymentMode,status,propertyId}`, `payment_matched_total{outcome}`,
+`refund_requested_total{reason}`, `refund_failed_total`, `reservation_autocancel_cancelled_total`,
+`kafka_dlt_messages_total{topic}` and `debezium_slot_lag_bytes{slot}` (WAL each Debezium slot holds back, read every 30 s
+by the reservation and payment services), plus Boot's HTTP, JVM and Kafka meters. Every meter is tagged `service`.
+
+**Health.** `/actuator/health/readiness` is UP only when the service's database and Kafka answer (the compose
+healthchecks use it); liveness does not depend on either.
 
 ## Further reading
 

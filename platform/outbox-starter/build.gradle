@@ -10,6 +10,10 @@ dependencies {
     // What every consuming service needs: a DataSource + JdbcClient, and the JsonMapper to serialise payloads.
     api 'org.springframework.boot:spring-boot-starter-jdbc'
     api 'org.springframework.boot:spring-boot-starter-jackson'
+    // debezium.slot.lag.bytes{slot} (ADR-0013); registered only when the service has a MeterRegistry.
+    api 'io.micrometer:micrometer-core'
+    // traceparent of the current span; used only when the service has Micrometer Tracing (observability starter).
+    compileOnly 'io.micrometer:micrometer-tracing'
 
     annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
 
@@ -25,6 +29,8 @@ dependencies {
     // only source of JUnit 5 + AssertJ + Mockito for a plain JDBC starter.
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+    // A real OTel-bridged Tracer and a MeterRegistry, as in a service.
+    testImplementation 'org.springframework.boot:spring-boot-starter-opentelemetry'
     testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
     testRuntimeOnly 'org.postgresql:postgresql'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'

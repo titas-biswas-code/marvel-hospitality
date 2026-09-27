@@ -23,6 +23,9 @@ Every later PR reuses these exact versions. Do not bump without a commit that on
 | Spring Security (Boot BOM) | 7.1.1 | 2026-09-26 | From Boot 4.1.1 BOM (same URL as spring-kafka). |
 | Awaitility (Boot BOM) | 4.3.0 | 2026-09-26 | From Boot 4.1.1 BOM (same URL as spring-kafka). Test-only: waits for asynchronous Kafka effects without `Thread.sleep` (PR-05). |
 | Micrometer (Boot BOM) | 1.17.1 | 2026-09-26 | From Boot 4.1.1 BOM (same URL as spring-kafka). `micrometer-core` is an API dependency of `platform/kafka-starter` (`kafka.dlt.messages`). |
+| Micrometer Tracing (Boot BOM) | 1.7.1 | 2026-09-27 | From Boot 4.1.1 BOM (`micrometer-tracing.version`). OTel bridge `micrometer-tracing-bridge-otel`, via `spring-boot-starter-opentelemetry` (PR-10). |
+| OpenTelemetry Java (Boot BOM) | 1.62.0 | 2026-09-27 | From Boot 4.1.1 BOM (`opentelemetry.version`): API, SDK, OTLP exporter. |
+| OpenTelemetry Logback appender | `io.opentelemetry.instrumentation:opentelemetry-logback-appender-1.0` 2.28.0-alpha | 2026-09-27 | https://repo1.maven.org/maven2/io/opentelemetry/instrumentation/opentelemetry-logback-appender-1.0/maven-metadata.xml — **not** managed by the Boot BOM; the release whose POM depends on exactly `opentelemetry-api` 1.62.0 (later releases need a newer API). Pinned in `platform/observability-starter/build.gradle`. PR-10. |
 | swagger-ui image | swaggerapi/swagger-ui:v5.33.0 | 2026-09-26 | https://hub.docker.com/r/swaggerapi/swagger-ui/tags — unified dev Swagger UI (infra/README.md), not the per-service springdoc UI. |
 | Postgres image | postgres:17.11-alpine | 2026-09-26 | https://hub.docker.com/_/postgres — 17 chosen over 18.6 for Debezium maturity. |
 | Kafka image | apache/kafka:4.3.1 | 2026-09-26 | https://hub.docker.com/r/apache/kafka/tags — KRaft mode. |
@@ -64,6 +67,16 @@ Source: https://github.com/spring-projects/spring-boot/wiki/Spring-Boot-4.0-Migr
   `org.wiremock.spring`) for the credit-card client tests (PR-03).
 - Platform starters added in PR-02: `com.marvel.hospitality:marvel-problem-spring-boot-starter:1.0.0` and
   `com.marvel.hospitality:marvel-outbox-spring-boot-starter:1.0.0` (built from `platform/`, no external version).
+- `spring-boot-starter-opentelemetry` (PR-10): Boot 4's observability starter — Micrometer Tracing with the OTel
+  bridge, `micrometer-registry-otlp`, the OTel SDK and OTLP exporter. Boot 4 builds an OTLP log exporter but does not
+  bridge Logback to it; `platform/observability-starter` adds the OTel Logback appender. Property keys differ from
+  Boot 3 and the old ones fail at startup (deprecated at level `error`): `management.opentelemetry.tracing.export.otlp.endpoint`
+  (was `management.otlp.tracing.endpoint`), `management.opentelemetry.logging.export.otlp.endpoint` (was
+  `management.otlp.logging.endpoint`); metrics stay `management.otlp.metrics.export.url`. `management.tracing.export.enabled=false`
+  (the replacement of `management.tracing.enabled`) turns the tracer into a no-op; to stop only the OTLP export use
+  `management.tracing.export.otlp.enabled=false`.
+- Health contributor API moved to `org.springframework.boot.health.contributor` (`AbstractHealthIndicator`, `Health`,
+  `Status`) in the `spring-boot-health` module; Boot 4.1.1 has no Kafka health indicator of its own.
 - `@WebMvcTest` lives in package `org.springframework.boot.webmvc.test.autoconfigure` (Boot 4) and does not
   auto-include a user-defined `SecurityFilterChain` configuration class; tests that need real security
   behaviour `@Import` it explicitly.

@@ -7,6 +7,8 @@ import com.marvel.hospitality.payment.TestcontainersConfiguration;
 import com.marvel.hospitality.payment.application.IngestBankTransactionCommand;
 import com.marvel.hospitality.payment.application.IngestBankTransactionUseCase;
 import com.marvel.hospitality.platform.outbox.cdc.DebeziumCdc;
+import io.micrometer.tracing.Span;
+import io.micrometer.tracing.Tracer;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -54,6 +56,9 @@ class PaymentOutboxCdcTest {
     @Autowired
     JsonMapper jsonMapper;
 
+    @Autowired
+    Tracer tracer;
+
     @Test
     void outboxRowIsPublishedToConfiguredTopicWithKeyAndHeaders() {
         DebeziumCdc.createTopics(TOPIC);
@@ -88,6 +93,37 @@ class PaymentOutboxCdcTest {
                 {"paymentId": "%s", "debtorAccountnumber": "NL91ABNA0417164300", "amountReceived": 120.00,
                  "transactionDescription": "1401541457 P4145478"}""".formatted(paymentId)));
         assertThat(record.value()).contains("\"amountReceived\": 120.00");
+    }
+
+    /**
+     * ADR-0013's saga-wide trace starts here, at the bank's webhook: the row stores the request's
+     * {@code traceparent}, and the committed connector config copies it into the header the reservation service's
+     * consumer continues.
+     */
+    @Test
+    void debeziumCopiesTraceparentIntoHeader() {
+        DebeziumCdc.createTopics(TOPIC);
+        DebeziumCdc.registerConnector(CONNECTOR);
+
+        String ref = "BANK-TX-TRACE-" + UUID.randomUUID();
+        Span span = tracer.nextSpan().name("post-bank-transaction").start();
+        String paymentId;
+        try (Tracer.SpanInScope ignored = tracer.withSpan(span)) {
+            paymentId = ingest.ingest(new IngestBankTransactionCommand(ref, "NL91ABNA0417164300", "A. Lovelace",
+                            new BigDecimal("120.00"), "EUR", "1401541457 P4145478", Instant.parse("2026-10-01T09:15:00Z"),
+                            "{\"bankTransactionRef\":\"" + ref + "\"}"))
+                    .transaction().paymentId().toString();
+        } finally {
+            span.end();
+        }
+        String traceparent = jdbc.sql("SELECT traceparent FROM outbox_event WHERE aggregate_id = :id")
+                .param("id", paymentId)
+                .query(String.class).single();
+
+        ConsumerRecord<String, String> record = DebeziumCdc.awaitRecord(TOPIC, paymentId, Duration.ofSeconds(60));
+
+        assertThat(traceparent).startsWith("00-" + span.context().traceId() + "-");
+        assertThat(header(record.headers(), "traceparent")).isEqualTo(traceparent);
     }
 
     private static String header(Headers headers, String name) {

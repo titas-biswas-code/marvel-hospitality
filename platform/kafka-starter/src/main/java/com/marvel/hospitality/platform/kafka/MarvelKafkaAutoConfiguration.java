@@ -12,9 +12,12 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration;
 import org.springframework.boot.kafka.autoconfigure.DefaultKafkaConsumerFactoryCustomizer;
+import org.springframework.boot.health.contributor.HealthIndicator;
 import org.springframework.boot.kafka.autoconfigure.KafkaAutoConfiguration;
 import org.springframework.boot.validation.autoconfigure.ValidationAutoConfiguration;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.kafka.core.KafkaAdmin;
 import org.springframework.kafka.annotation.KafkaListenerConfigurer;
 import org.springframework.kafka.config.ContainerCustomizer;
 import org.springframework.kafka.core.ProducerFactory;
@@ -42,6 +45,9 @@ import tools.jackson.databind.json.JsonMapper;
  *       the error handler as a {@code DeserializationException} instead of failing the poll loop forever;</li>
  *   <li>JSON turned into the listener's parameter type by {@link JacksonJsonMessageConverter} (Boot's
  *       {@link JsonMapper}); a malformed or invalid ({@code @Valid}) payload fails before the listener method runs;</li>
+ *   <li>observation on every listener container: the listener's span continues the trace named by the record's
+ *       {@code traceparent} header (copied from {@code outbox_event.traceparent} by Debezium, ADR-0013), and its
+ *       {@code traceId}/{@code spanId} are in the MDC of every log line the listener writes;</li>
  *   <li>{@link DefaultErrorHandler}: blocking exponential retries (in order, because per-key order matters), then
  *       {@link DeadLetterPublisher} to {@code <topic>.DLT}. Contract violations skip the retries (see
  *       {@link #NON_RETRYABLE}); business outcomes are never exceptions, so they never reach this path.</li>
@@ -76,7 +82,11 @@ public class MarvelKafkaAutoConfiguration {
 
     @Bean
     ContainerCustomizer<Object, Object, ConcurrentMessageListenerContainer<Object, Object>> marvelKafkaContainerCustomizer() {
-        return container -> container.getContainerProperties().setAckMode(AckMode.MANUAL_IMMEDIATE);
+        return container -> {
+            container.getContainerProperties().setAckMode(AckMode.MANUAL_IMMEDIATE);
+            // Uses the ObservationRegistry from the application context; a no-op when the service has no tracing.
+            container.getContainerProperties().setObservationEnabled(true);
+        };
     }
 
     @Bean
@@ -115,6 +125,19 @@ public class MarvelKafkaAutoConfiguration {
         // uncommitted, and a restart would dead-letter it again.
         errorHandler.setCommitRecovered(true);
         return errorHandler;
+    }
+
+    /** Only in services with Boot's health support (actuator); the bean name makes the contributor {@code kafka}. */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnClass(HealthIndicator.class)
+    @ConditionalOnBean(KafkaAdmin.class)
+    static class KafkaHealthConfiguration {
+
+        @Bean
+        @ConditionalOnMissingBean(name = "kafkaHealthIndicator")
+        KafkaHealthIndicator kafkaHealthIndicator(KafkaAdmin kafkaAdmin, MarvelKafkaProperties properties) {
+            return new KafkaHealthIndicator(kafkaAdmin.getConfigurationProperties(), properties.health().timeout());
+        }
     }
 
     @SafeVarargs

@@ -1,0 +1,19 @@
+description = 'OpenTelemetry traces, metrics and logs over OTLP (ADR-0013); LoggingContext for the MDC ids'
+
+ext {
+    // Not managed by the Boot 4.1.1 BOM; the release built against the BOM's opentelemetry-api 1.62.0 (docs/versions.md).
+    openTelemetryLogbackAppenderVersion = '2.28.0-alpha'
+}
+
+dependencies {
+    // Micrometer Tracing with the OTel bridge, OTLP exporters for traces and metrics, and the OTel SDK
+    // (Boot 4's observability starter); exposed transitively so a service needs only this starter.
+    api 'org.springframework.boot:spring-boot-starter-opentelemetry'
+    // Boot 4 builds an OTLP log exporter but does not bridge Logback to it; this appender does (Boot docs, "Loggers").
+    api "io.opentelemetry.instrumentation:opentelemetry-logback-appender-1.0:${openTelemetryLogbackAppenderVersion}"
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    // InMemoryLogRecordExporter: asserts what the Logback bridge actually hands to the OTLP exporter.
+    testImplementation 'io.opentelemetry:opentelemetry-sdk-testing'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}

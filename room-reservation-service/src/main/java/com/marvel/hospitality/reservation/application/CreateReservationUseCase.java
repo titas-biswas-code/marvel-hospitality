@@ -1,5 +1,6 @@
 package com.marvel.hospitality.reservation.application;
 
+import com.marvel.hospitality.platform.observability.LoggingContext;
 import com.marvel.hospitality.reservation.domain.Money;
 import com.marvel.hospitality.reservation.domain.NewReservation;
 import com.marvel.hospitality.reservation.domain.PaymentMode;
@@ -85,6 +86,12 @@ public class CreateReservationUseCase {
      *         {@link PaymentServiceUnavailableException}
      */
     public ReservationView create(CreateReservationCommand command) {
+        try (LoggingContext ignored = LoggingContext.create().propertyId(command.propertyId())) {
+            return createForProperty(command);
+        }
+    }
+
+    private ReservationView createForProperty(CreateReservationCommand command) {
         Property property = catalog.findProperty(command.propertyId())
                 .orElseThrow(() -> new PropertyNotFoundException(command.propertyId()));
         Room room = catalog.findRoom(command.propertyId(), command.roomNumber())
@@ -108,7 +115,6 @@ public class CreateReservationUseCase {
             throw ex;
         } catch (RuntimeException ex) {
             log.atWarn()
-                    .addKeyValue("propertyId", property.id())
                     .addKeyValue("paymentMode", command.paymentMode())
                     .addKeyValue("paymentReference", command.paymentReference())
                     .addKeyValue("reason", ex.getClass().getSimpleName())
@@ -148,12 +154,12 @@ public class CreateReservationUseCase {
             CreateReservationCommand command, Property property, Room room, Money nightlyRate, PaymentModeHandler handler) {
         for (int attempt = 1; ; attempt++) {
             ReservationId reservationId = idGenerator.next();
-            try {
+            // propertyId and reservationId reach every log line through the MDC (ADR-0013), so not as key-values too.
+            try (LoggingContext ignored = LoggingContext.create().reservationId(reservationId.value())) {
                 Reservation reservation = transactions.execute(status ->
                         createAndStore(command, reservationId, property, room, nightlyRate, handler));
                 log.atInfo()
-                        .addKeyValue("propertyId", property.id())
-                        .addKeyValue("reservationId", reservationId.value())
+                        .addKeyValue("paymentMode", reservation.paymentMode())
                         .addKeyValue("status", reservation.status())
                         .log("Reservation created");
                 return new ReservationView(reservation, reservation.bankTransferInstructions(property.bankAccountNumber()));
@@ -162,7 +168,7 @@ public class CreateReservationUseCase {
                     throw new IllegalStateException(
                             "Could not allocate a unique reservation id in " + maxIdAttempts + " attempts", collision);
                 }
-                log.atWarn().addKeyValue("reservationId", reservationId.value()).addKeyValue("attempt", attempt)
+                log.atWarn().addKeyValue("collidingReservationId", reservationId.value()).addKeyValue("attempt", attempt)
                         .log("Reservation id collision, retrying with a new id");
             }
         }

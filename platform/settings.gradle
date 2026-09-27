@@ -22,3 +22,6 @@ project(':inbox-starter').name = 'marvel-inbox-spring-boot-starter'
 
 include 'kafka-starter'
 project(':kafka-starter').name = 'marvel-kafka-spring-boot-starter'
+
+include 'observability-starter'
+project(':observability-starter').name = 'marvel-observability-spring-boot-starter'

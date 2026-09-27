@@ -20,12 +20,15 @@ repositories {
 
 ext {
     springdocVersion = '3.1.1'
+    marvelPlatformVersion = '1.0.0'
 }
 
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
+    // OpenTelemetry traces, metrics and logs over OTLP to otel-lgtm; LoggingContext for MDC ids (ADR-0013).
+    implementation "com.marvel.hospitality:marvel-observability-spring-boot-starter:${marvelPlatformVersion}"
     implementation "org.springdoc:springdoc-openapi-starter-webmvc-ui:${springdocVersion}"
 
     testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'

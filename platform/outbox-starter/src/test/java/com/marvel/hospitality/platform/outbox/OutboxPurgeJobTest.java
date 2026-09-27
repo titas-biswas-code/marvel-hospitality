@@ -22,7 +22,8 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  */
 @SpringBootTest(classes = TestApplication.class, properties = {
         "spring.application.name=outbox-test-app",
-        "spring.sql.init.mode=always"})
+        "spring.sql.init.mode=always",
+        "management.tracing.sampling.probability=1.0"})
 @Import(SharedPostgresConfiguration.class)
 class OutboxPurgeJobTest {
 

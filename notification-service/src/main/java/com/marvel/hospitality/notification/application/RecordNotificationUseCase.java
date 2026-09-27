@@ -5,13 +5,13 @@ import com.marvel.hospitality.notification.domain.NotificationRenderer;
 import com.marvel.hospitality.notification.domain.NotificationTemplate;
 import com.marvel.hospitality.notification.domain.RenderedNotification;
 import com.marvel.hospitality.notification.domain.ReservationStatusNotice;
+import com.marvel.hospitality.platform.observability.LoggingContext;
 import java.time.Clock;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionOperations;
 
@@ -54,8 +54,9 @@ public class RecordNotificationUseCase {
 
     private Optional<Notification> storeOnce(RecordNotificationCommand command) {
         ReservationStatusNotice notice = command.notice();
-        try (MDC.MDCCloseable ignoredReservationId = MDC.putCloseable("reservationId", notice.reservationId());
-                MDC.MDCCloseable ignoredPropertyId = MDC.putCloseable("propertyId", notice.propertyId())) {
+        try (LoggingContext ignored = LoggingContext.create()
+                .reservationId(notice.reservationId())
+                .propertyId(notice.propertyId())) {
             Optional<Notification> stored = Objects.requireNonNull(transactions.execute(status -> {
                 if (!inbox.firstDelivery(command.eventId())) {
                     log.debug("Status event {} already processed; duplicate delivery skipped", command.eventId());

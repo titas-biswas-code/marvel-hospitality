@@ -2,9 +2,9 @@ package com.marvel.hospitality.notification.infrastructure.channel;
 
 import com.marvel.hospitality.notification.application.NotificationChannel;
 import com.marvel.hospitality.notification.domain.Notification;
+import com.marvel.hospitality.platform.observability.LoggingContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
 
 /**
@@ -26,8 +26,9 @@ class LogNotificationChannel implements NotificationChannel {
 
     @Override
     public void deliver(Notification notification) {
-        try (MDC.MDCCloseable ignoredReservationId = MDC.putCloseable("reservationId", notification.reservationId());
-                MDC.MDCCloseable ignoredPropertyId = MDC.putCloseable("propertyId", notification.propertyId())) {
+        try (LoggingContext ignored = LoggingContext.create()
+                .reservationId(notification.reservationId())
+                .propertyId(notification.propertyId())) {
             log.info("Notification {} ({}) for reservation {}:\n{}", notification.id(), notification.template(),
                     notification.reservationId(), notification.renderedText());
         }

@@ -9,6 +9,8 @@ import com.marvel.hospitality.reservation.application.CreateReservationCommand;
 import com.marvel.hospitality.reservation.application.CreateReservationUseCase;
 import com.marvel.hospitality.reservation.domain.PaymentMode;
 import com.marvel.hospitality.reservation.domain.RoomSegment;
+import io.micrometer.tracing.Span;
+import io.micrometer.tracing.Tracer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -56,6 +58,9 @@ class ReservationOutboxCdcTest {
     @Autowired
     JsonMapper jsonMapper;
 
+    @Autowired
+    Tracer tracer;
+
     @Test
     void outboxRowIsPublishedToConfiguredTopicWithKeyAndHeaders() {
         DebeziumCdc.createTopics(TOPIC);
@@ -88,6 +93,36 @@ class ReservationOutboxCdcTest {
         assertThat(record.value())
                 .contains("\"previousStatus\": null", "\"reason\": null",
                         "\"totalAmount\": 360.00", "\"amountReceived\": 0.00");
+    }
+
+    /**
+     * ADR-0013's saga-wide trace: the row stores the {@code traceparent} of the work that wrote it, and the committed
+     * connector config copies it into the {@code traceparent} header, byte for byte, for the consumer to continue.
+     */
+    @Test
+    void debeziumCopiesTraceparentIntoHeader() {
+        DebeziumCdc.createTopics(TOPIC);
+        DebeziumCdc.registerConnector(CONNECTOR);
+
+        Span span = tracer.nextSpan().name("create-reservation").start();
+        String reservationId;
+        try (Tracer.SpanInScope ignored = tracer.withSpan(span)) {
+            // RTM01 room 301 in 2033: no other test books it.
+            reservationId = createReservation.create(new CreateReservationCommand("RTM01", "Ada Lovelace", "301",
+                            java.time.LocalDate.parse("2033-06-01"), java.time.LocalDate.parse("2033-06-03"),
+                            RoomSegment.LARGE, PaymentMode.BANK_TRANSFER, null))
+                    .reservation().reservationId().value();
+        } finally {
+            span.end();
+        }
+        String traceparent = jdbc.sql("SELECT traceparent FROM outbox_event WHERE aggregate_id = :id")
+                .param("id", reservationId)
+                .query(String.class).single();
+
+        ConsumerRecord<String, String> record = DebeziumCdc.awaitRecord(TOPIC, reservationId, Duration.ofSeconds(60));
+
+        assertThat(traceparent).startsWith("00-" + span.context().traceId() + "-");
+        assertThat(header(record.headers(), "traceparent")).isEqualTo(traceparent);
     }
 
     private static String header(Headers headers, String name) {

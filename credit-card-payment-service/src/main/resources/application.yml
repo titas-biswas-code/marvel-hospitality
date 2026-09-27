@@ -30,6 +30,26 @@ management:
       enabled: true
     readinessstate:
       enabled: true
+  # ADR-0013. Default = IDE run on the host, where otel-lgtm's OTLP port is published; `local` points at the compose
+  # hostname. Boot names the service (service.name) after spring.application.name.
+  opentelemetry:
+    tracing:
+      export:
+        otlp:
+          endpoint: ${OTLP_ENDPOINT:http://localhost:4318}/v1/traces
+    logging:
+      export:
+        otlp:
+          endpoint: ${OTLP_ENDPOINT:http://localhost:4318}/v1/logs
+  otlp:
+    metrics:
+      export:
+        url: ${OTLP_ENDPOINT:http://localhost:4318}/v1/metrics
+  metrics:
+    distribution:
+      # Histogram buckets, so Grafana can compute p95 latency per endpoint.
+      percentiles-histogram:
+        http.server.requests: true
 
 springdoc:
   # The generated OpenAPI resource is disabled (see api/OpenApiSpecController): this stub serves the
@@ -57,8 +77,46 @@ logging:
     format:
       console: ecs
 
+management:
+  opentelemetry:
+    tracing:
+      export:
+        otlp:
+          endpoint: ${OTLP_ENDPOINT:http://otel-lgtm:4318}/v1/traces
+    logging:
+      export:
+        otlp:
+          endpoint: ${OTLP_ENDPOINT:http://otel-lgtm:4318}/v1/logs
+  otlp:
+    metrics:
+      export:
+        url: ${OTLP_ENDPOINT:http://otel-lgtm:4318}/v1/metrics
+        # Boot's default is 1 minute; 10 s keeps the demo dashboard lively.
+        step: 10s
+  tracing:
+    sampling:
+      # Every request traced locally, so any saga can be found in Tempo (Boot's default samples 10 %).
+      probability: 1.0
+
 ---
 spring:
   config:
     activate:
       on-profile: test
+
+management:
+  # Tests never export telemetry, whether or not a developer's otel-lgtm is listening on localhost:4318. Only the
+  # OTLP export is off: tracing itself stays on (management.tracing.export.enabled=false would make the tracer a
+  # no-op), so outbox rows still get a traceparent in tests.
+  tracing:
+    export:
+      otlp:
+        enabled: false
+  logging:
+    export:
+      otlp:
+        enabled: false
+  otlp:
+    metrics:
+      export:
+        enabled: false

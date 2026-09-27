@@ -1,5 +1,8 @@
 package com.marvel.hospitality.platform.outbox;
 
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.tracing.Tracer;
+import io.micrometer.tracing.propagation.Propagator;
 import java.time.Clock;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -23,7 +26,8 @@ import tools.jackson.databind.json.JsonMapper;
  * rather than {@code @ConditionalOnClass} alone: a service that has this starter on its classpath but genuinely has
  * no {@code DataSource} configured (e.g. a slice test) should not fail to start just because the starter is present.
  */
-@AutoConfiguration(after = {JdbcClientAutoConfiguration.class, JacksonAutoConfiguration.class})
+@AutoConfiguration(after = {JdbcClientAutoConfiguration.class, JacksonAutoConfiguration.class},
+        afterName = "org.springframework.boot.micrometer.metrics.autoconfigure.CompositeMeterRegistryAutoConfiguration")
 @ConditionalOnClass(JdbcClient.class)
 @ConditionalOnBean(JdbcClient.class)
 @EnableConfigurationProperties(MarvelOutboxProperties.class)
@@ -33,9 +37,9 @@ public class MarvelOutboxAutoConfiguration {
     @ConditionalOnMissingBean
     OutboxEventWriter outboxEventWriter(
             JdbcClient jdbcClient, JsonMapper jsonMapper, ObjectProvider<Clock> clock,
-            MarvelOutboxProperties properties, Environment environment) {
+            MarvelOutboxProperties properties, Environment environment, ObjectProvider<TraceparentSource> traceparent) {
         return new OutboxEventWriter(jdbcClient, jsonMapper, clock.getIfAvailable(Clock::systemUTC),
-                resolveProducer(properties, environment));
+                resolveProducer(properties, environment), traceparent.getIfAvailable(TraceparentSource::none));
     }
 
     private static String resolveProducer(MarvelOutboxProperties properties, Environment environment) {
@@ -48,6 +52,37 @@ public class MarvelOutboxAutoConfiguration {
                     "No outbox producer name: set marvel.outbox.producer or spring.application.name.");
         }
         return producer;
+    }
+
+    /** Only when Micrometer Tracing is on the classpath; otherwise rows keep a {@code null} {@code traceparent}. */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnClass({Tracer.class, Propagator.class})
+    static class TraceparentConfiguration {
+
+        @Bean
+        @ConditionalOnMissingBean
+        TraceparentSource micrometerTraceparentSource(ObjectProvider<Tracer> tracer, ObjectProvider<Propagator> propagator) {
+            return new MicrometerTraceparentSource(tracer, propagator);
+        }
+    }
+
+    /**
+     * The slot-lag gauge (ADR-0007's replication-slot failure point). Needs a {@link MeterRegistry}, hence the
+     * ordering after Micrometer's composite registry; {@code marvel.outbox.slot-lag.enabled=false} turns it off, e.g.
+     * for a service whose database has no replication slot. Like the purge, it switches scheduling on only for itself.
+     */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnClass(MeterRegistry.class)
+    @ConditionalOnBean(MeterRegistry.class)
+    @ConditionalOnProperty(prefix = "marvel.outbox.slot-lag", name = "enabled", havingValue = "true", matchIfMissing = true)
+    @EnableScheduling
+    static class SlotLagConfiguration {
+
+        @Bean
+        @ConditionalOnMissingBean
+        ReplicationSlotLagMonitor replicationSlotLagMonitor(JdbcClient jdbcClient, MeterRegistry meterRegistry) {
+            return new ReplicationSlotLagMonitor(jdbcClient, meterRegistry);
+        }
     }
 
     /**

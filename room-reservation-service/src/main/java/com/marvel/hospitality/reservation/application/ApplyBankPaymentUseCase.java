@@ -1,10 +1,12 @@
 package com.marvel.hospitality.reservation.application;
 
+import com.marvel.hospitality.platform.observability.LoggingContext;
 import com.marvel.hospitality.reservation.domain.Money;
 import com.marvel.hospitality.reservation.domain.PaymentMatch;
 import com.marvel.hospitality.reservation.domain.PaymentMatchOutcome;
 import com.marvel.hospitality.reservation.domain.PaymentMatcher;
 import com.marvel.hospitality.reservation.domain.ReceivedPayment;
+import com.marvel.hospitality.reservation.domain.RefundDue;
 import com.marvel.hospitality.reservation.domain.Remittance;
 import com.marvel.hospitality.reservation.domain.Reservation;
 import com.marvel.hospitality.reservation.domain.ReservationId;
@@ -15,7 +17,6 @@ import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.slf4j.MDC;
 import org.springframework.transaction.support.TransactionOperations;
 
 /**
@@ -81,7 +82,7 @@ public class ApplyBankPaymentUseCase {
             return ApplyBankPaymentResult.applied(PaymentMatchOutcome.UNMATCHED_FORMAT);
         }
         ReservationId reservationId = remittance.get().reservationId();
-        try (MDC.MDCCloseable ignored = MDC.putCloseable("reservationId", reservationId.value())) {
+        try (LoggingContext ignored = LoggingContext.create().reservationId(reservationId.value())) {
             return applyToReservation(command, remittance.get(), receivedAt);
         }
     }
@@ -97,7 +98,7 @@ public class ApplyBankPaymentUseCase {
             return ApplyBankPaymentResult.applied(match.outcome());
         }
         Reservation reservation = found.get();
-        try (MDC.MDCCloseable ignored = MDC.putCloseable("propertyId", reservation.propertyId())) {
+        try (LoggingContext ignored = LoggingContext.create().propertyId(reservation.propertyId())) {
             PaymentMatch match = matcher.classify(
                     reservation, payments.sumMatched(reservation.reservationId()), command.amount());
             ReceivedPayment payment = new ReceivedPayment(command.paymentId(), reservation.reservationId(),
@@ -114,13 +115,14 @@ public class ApplyBankPaymentUseCase {
                 reservations.update(reservation);
                 reservation.pullEvents().forEach(outbox::append);
             }
-            if (match.refund() != null) {
-                refundPolicy.refundDue(payment, match.refund());
+            RefundDue refund = match.refund();
+            if (refund != null) {
+                refundPolicy.refundDue(payment, refund);
             }
             log.info("Payment {} of {} for reservation {}: {} (received {} of {})", command.paymentId(),
                     format(command.amount()), reservation.reservationId(), match.outcome(),
                     format(reservation.amountReceived()), format(reservation.totalAmount()));
-            return ApplyBankPaymentResult.applied(match.outcome());
+            return ApplyBankPaymentResult.applied(match.outcome(), refund == null ? null : refund.reason());
         }
     }
 
