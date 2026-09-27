@@ -131,8 +131,25 @@ sender so a crash between storing and sending cannot lose a message.
 ## Observability
 
 Every service sends traces, metrics and logs over OTLP to one container, `otel-lgtm` (ADR-0013). Grafana:
-**http://localhost:3000** (no login), dashboard *Marvel Hospitality* (reservations by status, payments by outcome,
-refunds, DLT count, Debezium slot lag, p95 latency). Locally every request is traced (sampling 1.0).
+**http://localhost:3000** (no login) → *Dashboards* → folder **Marvel Hospitality**, provisioned from
+[`infra/grafana/dashboards/`](infra/grafana/dashboards/) (a JSON file dropped there appears within seconds, no import):
+
+| Dashboard | Shows |
+|---|---|
+| Marvel Hospitality | Business view: reservations by status, payments by outcome, refunds, DLT count, slot lag, p95 latency |
+| Marvel – Service health | Per service: request rate, 4xx/5xx, p50/p95/p99, credit-card call latency, circuit breaker, retries, heap, GC, threads, CPU, connection pool, warnings/errors |
+| Marvel – Kafka & CDC | Consumer lag per topic, records consumed, last poll, rebalances, listener time and results, DLT, Debezium slot lag |
+| Marvel – Saga explorer | Type a reservation id: its log lines from every service (click *Trace* to open the saga in Tempo), recent traces with a Kafka hop, all warnings and errors |
+
+The dashboards otel-lgtm ships itself (*JVM Overview*, *RED Metrics*) expect OpenTelemetry-agent metric names and
+stay mostly empty for these Micrometer-instrumented services.
+
+**Sampling.** Locally every trace is kept (`management.tracing.sampling.probability: 1.0`, `local` profile); Boot's
+default elsewhere is 0.1. To keep 30 %, set `MANAGEMENT_TRACING_SAMPLING_PROBABILITY=0.3` in a service's environment
+(e.g. under `environment:` in `infra/docker-compose.yml`). The decision is taken once, where a trace starts (an HTTP
+request without `traceparent`, a scheduled job), and every later hop follows it — including across Debezium, since
+the flag travels in the stored `traceparent` — so a saga is kept whole or not at all. Log lines of a dropped trace
+still carry its `trace_id`; only Tempo has nothing to show for it.
 
 **One saga, one trace.** A trace does not stop at Kafka: each outbox row stores the `traceparent` of the work that
 wrote it, Debezium copies it into the Kafka header, and the consumer's span continues that trace. A bank payment is
