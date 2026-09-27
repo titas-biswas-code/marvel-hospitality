@@ -22,7 +22,7 @@ final class NotificationApiExamples {
                 "propertyId": "AMS01",
                 "channel": "LOG",
                 "template": "RESERVATION_CONFIRMED",
-                "renderedText": "Dear Ada Lovelace,\\n\\nyour reservation P4145478 is confirmed: room 201 at property AMS01, from 2027-10-10 to 2027-10-12.\\nTotal: EUR 240.00 (payment: BANK_TRANSFER, received so far: EUR 240.00).",
+                "renderedText": "Dear Ada Lovelace,\\n\\nyour reservation P4145478 is confirmed: room 201 at property AMS01, from 2027-10-10 to 2027-10-12.\\nTotal: EUR 240.00, received in full by bank transfer.",
                 "createdAt": "2026-10-01T09:15:04Z"
               }
             ]""";

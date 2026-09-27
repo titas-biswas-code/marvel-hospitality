@@ -58,6 +58,15 @@ class ReservationStatusChangedMessageMatchesEventsContract {
         assertThat(validator.validate(read(value))).isEmpty();
     }
 
+    @Test
+    void bankTransferWithoutPaymentDeadlineIsInvalid() throws IOException {
+        String value = example().replace("\"paymentDeadlineAt\": \"2027-10-07T22:00:00Z\"", "\"paymentDeadlineAt\": null");
+
+        assertThat(validator.validate(read(value)))
+                .extracting(violation -> violation.getMessage())
+                .containsExactly("paymentDeadlineAt is required when paymentMode is BANK_TRANSFER");
+    }
+
     /** The example as text: read straight into the record like the Kafka converter does, never via a JSON tree. */
     private String example() throws IOException {
         try (InputStream in = getClass().getResourceAsStream(EXAMPLE)) {

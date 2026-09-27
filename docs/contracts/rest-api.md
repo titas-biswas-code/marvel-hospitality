@@ -214,4 +214,28 @@ Implements the corrected spec (`credit-card-payment-service/src/main/resources/o
 No auth (the brief's spec has none; noted in ADR-0011).
 
 ## notification-service (port 8082)
-### GET /notifications?reservationId=P4145478  role `reservation:read` — lists rendered notifications (demo/verification only).
+### GET /notifications?reservationId=P4145478  role `reservation:read`
+Lists the rendered notifications of one reservation, oldest first (demo/verification only; one per
+`reservation-status-changed` event):
+```json
+[
+  {
+    "id": "0b6f3c1e-8a52-4d0e-9c43-2f7d1e5a9b10",
+    "eventId": "7d3f5a2b-1c4e-4f6a-8b9d-0e1f2a3b4c5d",
+    "reservationId": "P4145478",
+    "propertyId": "AMS01",
+    "channel": "LOG",
+    "template": "RESERVATION_CREATED_PENDING_PAYMENT",
+    "renderedText": "Dear Ada Lovelace, …",
+    "createdAt": "2026-09-26T10:00:01Z"
+  }
+]
+```
+- `template ∈ {RESERVATION_CREATED_PENDING_PAYMENT, RESERVATION_CONFIRMED, PARTIAL_PAYMENT_RECEIVED,
+  RESERVATION_CANCELLED_PAYMENT_DEADLINE_MISSED, UNKNOWN}`; `eventId` is the event's header `id`.
+- Property-scoped by filtering, not by `403 FORBIDDEN_PROPERTY` (the path names no property): only notifications of
+  properties in the token's `properties` claim are returned (`*` = all). An unknown reservation, or one of another
+  property, yields `200 []`.
+- `reservationId` missing, blank or longer than 8 characters → `400 VALIDATION_FAILED`.
+
+Error codes: `VALIDATION_FAILED` 400, `UNAUTHENTICATED` 401, `FORBIDDEN` 403, `INTERNAL_ERROR` 500.

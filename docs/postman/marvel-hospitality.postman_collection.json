@@ -439,8 +439,9 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "// A random 2-night stay between 2030 and 2039, so the folder can be run again without 409 ROOM_UNAVAILABLE.",
-                  "const start = new Date(Date.UTC(2030, 0, 1) + Math.floor(Math.random() * 3650) * 86400000);",
+                  "// A random 2-night stay in the 1000 years from 2030: re-runs (of this and every other demo)",
+                  "// practically never pick overlapping dates for the same room, so no 409 ROOM_UNAVAILABLE.",
+                  "const start = new Date(Date.UTC(2030, 0, 1) + Math.floor(Math.random() * 365000) * 86400000);",
                   "const end = new Date(start.getTime() + 2 * 86400000);",
                   "pm.environment.set(\"demo_start\", start.toISOString().slice(0, 10));",
                   "pm.environment.set(\"demo_end\", end.toISOString().slice(0, 10));"
@@ -1039,6 +1040,2994 @@
       ]
     },
     {
+      "name": "Demo: booking rules",
+      "description": "Self-contained run of the PR-02/PR-03 booking rules end to end (Collection Runner, top to bottom): overbooking prevented by the database's exclusion constraint, segment mismatch, invalid stay, unknown room, bank-transfer lead time, cross-property lookup, property/role authorization (FORBIDDEN_PROPERTY vs FORBIDDEN), and the credit-card reference rules. Fetches its own tokens (alice, bob, carol) and books its own random dates; re-runnable any number of times.",
+      "item": [
+        {
+          "name": "1. Get token (alice)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "password",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "marvel-postman",
+                  "type": "text"
+                },
+                {
+                  "key": "username",
+                  "value": "alice",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "{{password}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{keycloak_url}}/realms/marvel/protocol/openid-connect/token",
+              "host": [
+                "{{keycloak_url}}"
+              ],
+              "path": [
+                "realms",
+                "marvel",
+                "protocol",
+                "openid-connect",
+                "token"
+              ]
+            },
+            "description": "Password grant for dev user alice (reservation:read, reservation:write; properties AMS01, RTM01). Stores access_token in the environment."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "",
+                  "pm.test(\"Response has access_token\", function () {",
+                  "    pm.expect(json.access_token).to.be.a(\"string\").and.not.empty;",
+                  "});",
+                  "",
+                  "pm.environment.set(\"access_token\", json.access_token);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "2. Book room 102 SMALL, random 2 nights at AMS01 (baseline)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerName\": \"Rules Demo\",\n  \"roomNumber\": \"102\",\n  \"startDate\": \"{{b1_start}}\",\n  \"endDate\": \"{{b1_end}}\",\n  \"roomSegment\": \"SMALL\",\n  \"paymentMode\": \"CASH\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{reservation_url}}/properties/AMS01/reservations",
+              "host": [
+                "{{reservation_url}}"
+              ],
+              "path": [
+                "properties",
+                "AMS01",
+                "reservations"
+              ]
+            },
+            "description": "Proves a plain cash booking succeeds. Saves b1_reservationId/b1_start/b1_end; the next two requests reuse these same dates to prove overbooking is prevented by the database (unique exclusion constraint, never a blanket 409 mapping)."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// A random 2-night stay in the 1000 years from 2030: re-runs (of this and every other demo)",
+                  "// practically never pick overlapping dates for the same room, so no 409 ROOM_UNAVAILABLE.",
+                  "const start = new Date(Date.UTC(2030, 0, 1) + Math.floor(Math.random() * 365000) * 86400000);",
+                  "const end = new Date(start.getTime() + 2 * 86400000);",
+                  "pm.environment.set(\"b1_start\", start.toISOString().slice(0, 10));",
+                  "pm.environment.set(\"b1_end\", end.toISOString().slice(0, 10));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 201\", () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"status is CONFIRMED\", () => pm.expect(json.status).to.eql(\"CONFIRMED\"));",
+                  "pm.environment.set(\"b1_reservationId\", json.reservationId);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "3. Same room, same dates again → 409 ROOM_UNAVAILABLE",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerName\": \"Rules Demo\",\n  \"roomNumber\": \"102\",\n  \"startDate\": \"{{b1_start}}\",\n  \"endDate\": \"{{b1_end}}\",\n  \"roomSegment\": \"SMALL\",\n  \"paymentMode\": \"CASH\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{reservation_url}}/properties/AMS01/reservations",
+              "host": [
+                "{{reservation_url}}"
+              ],
+              "path": [
+                "properties",
+                "AMS01",
+                "reservations"
+              ]
+            },
+            "description": "Exact same room and dates as step 2: the Postgres exclusion constraint rejects the overlap, never a blanket DataIntegrityViolationException mapping."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 409\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"Content-Type is application/problem+json\", () => {",
+                  "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test(\"code is ROOM_UNAVAILABLE\", () => pm.expect(json.code).to.eql(\"ROOM_UNAVAILABLE\"));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "4. Same room, overlapping stay → 409 ROOM_UNAVAILABLE",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerName\": \"Rules Demo\",\n  \"roomNumber\": \"102\",\n  \"startDate\": \"{{b1_overlap_start}}\",\n  \"endDate\": \"{{b1_overlap_end}}\",\n  \"roomSegment\": \"SMALL\",\n  \"paymentMode\": \"CASH\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{reservation_url}}/properties/AMS01/reservations",
+              "host": [
+                "{{reservation_url}}"
+              ],
+              "path": [
+                "properties",
+                "AMS01",
+                "reservations"
+              ]
+            },
+            "description": "Starts one day into step 2's stay (partial overlap, not identical dates): still 409 ROOM_UNAVAILABLE."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const start = new Date(pm.environment.get(\"b1_start\") + \"T00:00:00Z\");",
+                  "const overlapStart = new Date(start.getTime() + 1 * 86400000);",
+                  "const overlapEnd = new Date(overlapStart.getTime() + 2 * 86400000);",
+                  "pm.environment.set(\"b1_overlap_start\", overlapStart.toISOString().slice(0, 10));",
+                  "pm.environment.set(\"b1_overlap_end\", overlapEnd.toISOString().slice(0, 10));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 409\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"Content-Type is application/problem+json\", () => {",
+                  "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test(\"code is ROOM_UNAVAILABLE\", () => pm.expect(json.code).to.eql(\"ROOM_UNAVAILABLE\"));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "5. Room 102 with roomSegment MEDIUM → 422 ROOM_SEGMENT_MISMATCH",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerName\": \"Rules Demo\",\n  \"roomNumber\": \"102\",\n  \"startDate\": \"{{b1_start}}\",\n  \"endDate\": \"{{b1_end}}\",\n  \"roomSegment\": \"MEDIUM\",\n  \"paymentMode\": \"CASH\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{reservation_url}}/properties/AMS01/reservations",
+              "host": [
+                "{{reservation_url}}"
+              ],
+              "path": [
+                "properties",
+                "AMS01",
+                "reservations"
+              ]
+            },
+            "description": "Room 102 is actually SMALL. The segment check runs before availability, so this is 422 ROOM_SEGMENT_MISMATCH even though the dates are already booked (step 2), not 409."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 422\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"Content-Type is application/problem+json\", () => {",
+                  "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test(\"code is ROOM_SEGMENT_MISMATCH\", () => pm.expect(json.code).to.eql(\"ROOM_SEGMENT_MISMATCH\"));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "6. endDate == startDate → 400 VALIDATION_FAILED",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerName\": \"Rules Demo\",\n  \"roomNumber\": \"102\",\n  \"startDate\": \"{{b1_start}}\",\n  \"endDate\": \"{{b1_start}}\",\n  \"roomSegment\": \"SMALL\",\n  \"paymentMode\": \"CASH\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{reservation_url}}/properties/AMS01/reservations",
+              "host": [
+                "{{reservation_url}}"
+              ],
+              "path": [
+                "properties",
+                "AMS01",
+                "reservations"
+              ]
+            },
+            "description": "A zero-night stay (endDate equals startDate) fails the domain's stay-shape rule."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Content-Type is application/problem+json\", () => {",
+                  "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test(\"code is VALIDATION_FAILED\", () => pm.expect(json.code).to.eql(\"VALIDATION_FAILED\"));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "7. roomNumber \"999\" → 404 ROOM_NOT_FOUND",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerName\": \"Rules Demo\",\n  \"roomNumber\": \"999\",\n  \"startDate\": \"{{b1_start}}\",\n  \"endDate\": \"{{b1_end}}\",\n  \"roomSegment\": \"SMALL\",\n  \"paymentMode\": \"CASH\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{reservation_url}}/properties/AMS01/reservations",
+              "host": [
+                "{{reservation_url}}"
+              ],
+              "path": [
+                "properties",
+                "AMS01",
+                "reservations"
+              ]
+            },
+            "description": "Room 999 does not exist in property AMS01: the room lookup fails before any other rule runs."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"Content-Type is application/problem+json\", () => {",
+                  "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test(\"code is ROOM_NOT_FOUND\", () => pm.expect(json.code).to.eql(\"ROOM_NOT_FOUND\"));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "8. Bank transfer starting tomorrow → 422 BANK_TRANSFER_LEAD_TIME_TOO_SHORT",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerName\": \"Rules Demo\",\n  \"roomNumber\": \"101\",\n  \"startDate\": \"{{b1_tomorrow}}\",\n  \"endDate\": \"{{b1_day_after}}\",\n  \"roomSegment\": \"SMALL\",\n  \"paymentMode\": \"BANK_TRANSFER\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{reservation_url}}/properties/AMS01/reservations",
+              "host": [
+                "{{reservation_url}}"
+              ],
+              "path": [
+                "properties",
+                "AMS01",
+                "reservations"
+              ]
+            },
+            "description": "The bank-transfer deadline is local midnight two days before arrival (ADR-0010); arriving tomorrow leaves less than two days, so the deadline is already in the past."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const tomorrow = new Date(Date.now() + 1 * 86400000);",
+                  "const dayAfter = new Date(Date.now() + 2 * 86400000);",
+                  "pm.environment.set(\"b1_tomorrow\", tomorrow.toISOString().slice(0, 10));",
+                  "pm.environment.set(\"b1_day_after\", dayAfter.toISOString().slice(0, 10));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 422\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"Content-Type is application/problem+json\", () => {",
+                  "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test(\"code is BANK_TRANSFER_LEAD_TIME_TOO_SHORT\", () => pm.expect(json.code).to.eql(\"BANK_TRANSFER_LEAD_TIME_TOO_SHORT\"));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "9. GET the booked reservation under RTM01 → 404 RESERVATION_NOT_FOUND",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{reservation_url}}/properties/RTM01/reservations/{{b1_reservationId}}",
+              "host": [
+                "{{reservation_url}}"
+              ],
+              "path": [
+                "properties",
+                "RTM01",
+                "reservations",
+                "{{b1_reservationId}}"
+              ]
+            },
+            "description": "The reservation from step 2 belongs to AMS01: looking it up under a different property answers 404, same as an unknown id."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"Content-Type is application/problem+json\", () => {",
+                  "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test(\"code is RESERVATION_NOT_FOUND\", () => pm.expect(json.code).to.eql(\"RESERVATION_NOT_FOUND\"));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "10. Get token (bob)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "password",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "marvel-postman",
+                  "type": "text"
+                },
+                {
+                  "key": "username",
+                  "value": "bob",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "{{password}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{keycloak_url}}/realms/marvel/protocol/openid-connect/token",
+              "host": [
+                "{{keycloak_url}}"
+              ],
+              "path": [
+                "realms",
+                "marvel",
+                "protocol",
+                "openid-connect",
+                "token"
+              ]
+            },
+            "description": "Password grant for dev user bob (reservation:read, reservation:write; property AMS01 only, no RTM01). Stores access_token in the environment."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "",
+                  "pm.test(\"Response has access_token\", function () {",
+                  "    pm.expect(json.access_token).to.be.a(\"string\").and.not.empty;",
+                  "});",
+                  "",
+                  "pm.environment.set(\"access_token\", json.access_token);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "11. bob books at RTM01 → 403 FORBIDDEN_PROPERTY",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerName\": \"Bob Probe\",\n  \"roomNumber\": \"101\",\n  \"startDate\": \"{{b1_probe_start}}\",\n  \"endDate\": \"{{b1_probe_end}}\",\n  \"roomSegment\": \"SMALL\",\n  \"paymentMode\": \"CASH\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{reservation_url}}/properties/RTM01/reservations",
+              "host": [
+                "{{reservation_url}}"
+              ],
+              "path": [
+                "properties",
+                "RTM01",
+                "reservations"
+              ]
+            },
+            "description": "bob holds reservation:write but his token's properties claim is [AMS01] only: a role match with a property mismatch is 403 FORBIDDEN_PROPERTY (never evaluates the request body)."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// A random 2-night stay in the 1000 years from 2030: re-runs (of this and every other demo)",
+                  "// practically never pick overlapping dates for the same room, so no 409 ROOM_UNAVAILABLE.",
+                  "const start = new Date(Date.UTC(2030, 0, 1) + Math.floor(Math.random() * 365000) * 86400000);",
+                  "const end = new Date(start.getTime() + 2 * 86400000);",
+                  "pm.environment.set(\"b1_probe_start\", start.toISOString().slice(0, 10));",
+                  "pm.environment.set(\"b1_probe_end\", end.toISOString().slice(0, 10));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"Content-Type is application/problem+json\", () => {",
+                  "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test(\"code is FORBIDDEN_PROPERTY\", () => pm.expect(json.code).to.eql(\"FORBIDDEN_PROPERTY\"));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "12. Get token (carol)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "password",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "marvel-postman",
+                  "type": "text"
+                },
+                {
+                  "key": "username",
+                  "value": "carol",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "{{password}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{keycloak_url}}/realms/marvel/protocol/openid-connect/token",
+              "host": [
+                "{{keycloak_url}}"
+              ],
+              "path": [
+                "realms",
+                "marvel",
+                "protocol",
+                "openid-connect",
+                "token"
+              ]
+            },
+            "description": "Password grant for dev user carol (reservation:read, bank:read; property RTM01 only; no reservation:write). Stores access_token in the environment."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "",
+                  "pm.test(\"Response has access_token\", function () {",
+                  "    pm.expect(json.access_token).to.be.a(\"string\").and.not.empty;",
+                  "});",
+                  "",
+                  "pm.environment.set(\"access_token\", json.access_token);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "13. carol books at RTM01 → 403 FORBIDDEN",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerName\": \"Carol Probe\",\n  \"roomNumber\": \"101\",\n  \"startDate\": \"{{b1_probe_start}}\",\n  \"endDate\": \"{{b1_probe_end}}\",\n  \"roomSegment\": \"SMALL\",\n  \"paymentMode\": \"CASH\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{reservation_url}}/properties/RTM01/reservations",
+              "host": [
+                "{{reservation_url}}"
+              ],
+              "path": [
+                "properties",
+                "RTM01",
+                "reservations"
+              ]
+            },
+            "description": "carol's token has RTM01 in its properties claim but lacks reservation:write altogether: the role check runs first (SecurityProblemHandler), so a missing role is 403 FORBIDDEN, not FORBIDDEN_PROPERTY, even though the property would have matched."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"Content-Type is application/problem+json\", () => {",
+                  "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test(\"code is FORBIDDEN\", () => pm.expect(json.code).to.eql(\"FORBIDDEN\"));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "14. Get token (alice)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "password",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "marvel-postman",
+                  "type": "text"
+                },
+                {
+                  "key": "username",
+                  "value": "alice",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "{{password}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{keycloak_url}}/realms/marvel/protocol/openid-connect/token",
+              "host": [
+                "{{keycloak_url}}"
+              ],
+              "path": [
+                "realms",
+                "marvel",
+                "protocol",
+                "openid-connect",
+                "token"
+              ]
+            },
+            "description": "Password grant for dev user alice (reservation:read, reservation:write; properties AMS01, RTM01). Stores access_token in the environment."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "",
+                  "pm.test(\"Response has access_token\", function () {",
+                  "    pm.expect(json.access_token).to.be.a(\"string\").and.not.empty;",
+                  "});",
+                  "",
+                  "pm.environment.set(\"access_token\", json.access_token);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "15. Card booking room 401 EXTRA_LARGE (OK-… → 201 CONFIRMED)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerName\": \"Rules Demo\",\n  \"roomNumber\": \"401\",\n  \"startDate\": \"{{b1_card_start}}\",\n  \"endDate\": \"{{b1_card_end}}\",\n  \"roomSegment\": \"EXTRA_LARGE\",\n  \"paymentMode\": \"CREDIT_CARD\",\n  \"paymentReference\": \"{{b1_card_reference}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{reservation_url}}/properties/AMS01/reservations",
+              "host": [
+                "{{reservation_url}}"
+              ],
+              "path": [
+                "properties",
+                "AMS01",
+                "reservations"
+              ]
+            },
+            "description": "A fresh OK-prefixed reference each run confirms immediately. Saves b1_card_reference for the next request, which reuses it on different dates."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// A random 2-night stay in the 1000 years from 2030: re-runs (of this and every other demo)",
+                  "// practically never pick overlapping dates for the same room, so no 409 ROOM_UNAVAILABLE.",
+                  "const start = new Date(Date.UTC(2030, 0, 1) + Math.floor(Math.random() * 365000) * 86400000);",
+                  "const end = new Date(start.getTime() + 2 * 86400000);",
+                  "pm.environment.set(\"b1_card_start\", start.toISOString().slice(0, 10));",
+                  "pm.environment.set(\"b1_card_end\", end.toISOString().slice(0, 10));",
+                  "pm.environment.set(\"b1_card_reference\", \"OK-\" + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 201\", () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"status is CONFIRMED\", () => pm.expect(json.status).to.eql(\"CONFIRMED\"));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "16. Second card booking, same reference → 409 PAYMENT_REFERENCE_ALREADY_USED",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerName\": \"Rules Demo\",\n  \"roomNumber\": \"401\",\n  \"startDate\": \"{{b1_card2_start}}\",\n  \"endDate\": \"{{b1_card2_end}}\",\n  \"roomSegment\": \"EXTRA_LARGE\",\n  \"paymentMode\": \"CREDIT_CARD\",\n  \"paymentReference\": \"{{b1_card_reference}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{reservation_url}}/properties/AMS01/reservations",
+              "host": [
+                "{{reservation_url}}"
+              ],
+              "path": [
+                "properties",
+                "AMS01",
+                "reservations"
+              ]
+            },
+            "description": "Different dates than step 15 but the same paymentReference: one card payment backs one reservation (unique index), checked before availability, so this is 409 PAYMENT_REFERENCE_ALREADY_USED rather than a successful second booking."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// A random 2-night stay in the 1000 years from 2030: re-runs (of this and every other demo)",
+                  "// practically never pick overlapping dates for the same room, so no 409 ROOM_UNAVAILABLE.",
+                  "const start = new Date(Date.UTC(2030, 0, 1) + Math.floor(Math.random() * 365000) * 86400000);",
+                  "const end = new Date(start.getTime() + 2 * 86400000);",
+                  "pm.environment.set(\"b1_card2_start\", start.toISOString().slice(0, 10));",
+                  "pm.environment.set(\"b1_card2_end\", end.toISOString().slice(0, 10));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 409\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"Content-Type is application/problem+json\", () => {",
+                  "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test(\"code is PAYMENT_REFERENCE_ALREADY_USED\", () => pm.expect(json.code).to.eql(\"PAYMENT_REFERENCE_ALREADY_USED\"));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "17. Card booking with REJ-… reference → 422 PAYMENT_REJECTED",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerName\": \"Rules Demo\",\n  \"roomNumber\": \"401\",\n  \"startDate\": \"{{b1_rej_start}}\",\n  \"endDate\": \"{{b1_rej_end}}\",\n  \"roomSegment\": \"EXTRA_LARGE\",\n  \"paymentMode\": \"CREDIT_CARD\",\n  \"paymentReference\": \"{{b1_rej_reference}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{reservation_url}}/properties/AMS01/reservations",
+              "host": [
+                "{{reservation_url}}"
+              ],
+              "path": [
+                "properties",
+                "AMS01",
+                "reservations"
+              ]
+            },
+            "description": "The credit-card stub rejects any REJ-prefixed reference: nothing is persisted, repeatable."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// A random 2-night stay in the 1000 years from 2030: re-runs (of this and every other demo)",
+                  "// practically never pick overlapping dates for the same room, so no 409 ROOM_UNAVAILABLE.",
+                  "const start = new Date(Date.UTC(2030, 0, 1) + Math.floor(Math.random() * 365000) * 86400000);",
+                  "const end = new Date(start.getTime() + 2 * 86400000);",
+                  "pm.environment.set(\"b1_rej_start\", start.toISOString().slice(0, 10));",
+                  "pm.environment.set(\"b1_rej_end\", end.toISOString().slice(0, 10));",
+                  "pm.environment.set(\"b1_rej_reference\", \"REJ-\" + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 422\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"Content-Type is application/problem+json\", () => {",
+                  "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test(\"code is PAYMENT_REJECTED\", () => pm.expect(json.code).to.eql(\"PAYMENT_REJECTED\"));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Demo: unmatched payments",
+      "description": "Self-contained run of PR-05's unmatched-payment reconciliation view (Collection Runner, top to bottom): a well-formed remittance naming an unknown reservationId, and an unparseable remittance. Both are persisted but never auto-resolved or refunded (ADR-0009: a human might still reconcile a typo). Fetches its own bank-simulator token and uses unique bankTransactionRef values each run; re-runnable any number of times.",
+      "item": [
+        {
+          "name": "1. Get token (bank-simulator)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "client_credentials",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "bank-simulator",
+                  "type": "text"
+                },
+                {
+                  "key": "client_secret",
+                  "value": "{{bank_simulator_client_secret}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{keycloak_url}}/realms/marvel/protocol/openid-connect/token",
+              "host": [
+                "{{keycloak_url}}"
+              ],
+              "path": [
+                "realms",
+                "marvel",
+                "protocol",
+                "openid-connect",
+                "token"
+              ]
+            },
+            "description": "Client-credentials grant for the bank-simulator service account (role bank:ingest, bank:read; properties [\"*\"]). Stores access_token in the environment."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "",
+                  "pm.test(\"Response has access_token\", function () {",
+                  "    pm.expect(json.access_token).to.be.a(\"string\").and.not.empty;",
+                  "});",
+                  "",
+                  "pm.environment.set(\"access_token\", json.access_token);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "2. Bank pays for a reservation that does not exist → 202",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bankTransactionRef\": \"{{b2_tx_ref_unknown}}\",\n  \"debtorAccountNumber\": \"NL91ABNA0417164300\",\n  \"debtorName\": \"Nobody\",\n  \"amount\": 10.00,\n  \"currency\": \"EUR\",\n  \"remittanceInformation\": \"{{b2_e2e_unknown}} {{b2_fake_reservation_id}}\",\n  \"bookedAt\": \"{{b2_booked_at}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{payment_url}}/bank-transactions",
+              "host": [
+                "{{payment_url}}"
+              ],
+              "path": [
+                "bank-transactions"
+              ]
+            },
+            "description": "Well-formed remittance (matches identifiers.md's regex, valid reservationId shape P + 7 Crockford32 characters) but the id is randomly generated and does not back any reservation. Payment is still persisted (ADR-0009): saves paymentId for the reconciliation check below."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function randomReservationId() {",
+                  "    const alphabet = \"0123456789ABCDEFGHJKMNPQRSTVWXYZ\";",
+                  "    let id = \"P\";",
+                  "    for (let i = 0; i < 7; i++) {",
+                  "        id += alphabet[Math.floor(Math.random() * alphabet.length)];",
+                  "    }",
+                  "    return id;",
+                  "}",
+                  "pm.environment.set(\"b2_tx_ref_unknown\", \"BANK-TX-DEMO-UNMATCHED-\" + Date.now() + \"-unknown\");",
+                  "pm.environment.set(\"b2_e2e_unknown\", String(Date.now()).slice(-10));",
+                  "pm.environment.set(\"b2_fake_reservation_id\", randomReservationId());",
+                  "pm.environment.set(\"b2_booked_at\", new Date().toISOString());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 202\", () => pm.response.to.have.status(202));",
+                  "pm.environment.set(\"b2_payment_id_unknown\", pm.response.json().paymentId);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "3. Bank posts an unparseable remittance → 202",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bankTransactionRef\": \"{{b2_tx_ref_format}}\",\n  \"debtorAccountNumber\": \"NL91ABNA0417164300\",\n  \"debtorName\": \"Nobody\",\n  \"amount\": 10.00,\n  \"currency\": \"EUR\",\n  \"remittanceInformation\": \"hello bank\",\n  \"bookedAt\": \"{{b2_booked_at}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{payment_url}}/bank-transactions",
+              "host": [
+                "{{payment_url}}"
+              ],
+              "path": [
+                "bank-transactions"
+              ]
+            },
+            "description": "\"hello bank\" does not match the remittance regex at all (no fuzzy matching, ADR-0009): still persisted for reconciliation. Saves paymentId."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set(\"b2_tx_ref_format\", \"BANK-TX-DEMO-UNMATCHED-\" + Date.now() + \"-format\");",
+                  "pm.environment.set(\"b2_booked_at\", new Date().toISOString());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 202\", () => pm.response.to.have.status(202));",
+                  "pm.environment.set(\"b2_payment_id_format\", pm.response.json().paymentId);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "4. List payments with no reservation match (bank-wide) until both appear",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{reservation_url}}/unmatched-payments",
+              "host": [
+                "{{reservation_url}}"
+              ],
+              "path": [
+                "unmatched-payments"
+              ]
+            },
+            "description": "bank:read, no property check (ADR-0009: these payments belong to no property). Retries for up to ~10 s while the two payments above travel ingest -> outbox -> Debezium -> Kafka -> the reservation service's consumer, then asserts neither was auto-resolved or refunded."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const unknown = pm.response.json().find(p => p.paymentId === pm.environment.get(\"b2_payment_id_unknown\"));",
+                  "const format = pm.response.json().find(p => p.paymentId === pm.environment.get(\"b2_payment_id_format\"));",
+                  "const attempt = Number(pm.environment.get(\"b2_attempt\") || 0);",
+                  "const done = Boolean(unknown) && Boolean(format);",
+                  "if (!done && attempt < 10) {",
+                  "    pm.environment.set(\"b2_attempt\", attempt + 1);",
+                  "    setTimeout(() => {}, 1000);",
+                  "    pm.execution.setNextRequest(pm.info.requestName);",
+                  "} else {",
+                  "    pm.environment.unset(\"b2_attempt\");",
+                  "    pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "    pm.test(\"unknown-reservation payment is UNMATCHED_UNKNOWN_RESERVATION, unresolved, unrefunded\", () => {",
+                  "        pm.expect(unknown, \"payment from step 2 present\").to.not.be.undefined;",
+                  "        pm.expect(unknown.outcome).to.eql(\"UNMATCHED_UNKNOWN_RESERVATION\");",
+                  "        pm.expect(unknown.reservationId).to.be.null;",
+                  "        pm.expect(unknown.propertyId).to.be.null;",
+                  "        pm.expect(unknown.refund).to.be.null;",
+                  "    });",
+                  "    pm.test(\"format payment is UNMATCHED_FORMAT, unresolved, unrefunded\", () => {",
+                  "        pm.expect(format, \"payment from step 3 present\").to.not.be.undefined;",
+                  "        pm.expect(format.outcome).to.eql(\"UNMATCHED_FORMAT\");",
+                  "        pm.expect(format.reservationId).to.be.null;",
+                  "        pm.expect(format.propertyId).to.be.null;",
+                  "        pm.expect(format.refund).to.be.null;",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "5. Get the unknown-reservation bank transaction by paymentId",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{payment_url}}/bank-transactions/{{b2_payment_id_unknown}}",
+              "host": [
+                "{{payment_url}}"
+              ],
+              "path": [
+                "bank-transactions",
+                "{{b2_payment_id_unknown}}"
+              ]
+            },
+            "description": "The payment ledger keeps every ingested transaction regardless of matching outcome (bank:read)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"Returns the transaction posted in step 2\", () => {",
+                  "    pm.expect(json.paymentId).to.eql(pm.environment.get(\"b2_payment_id_unknown\"));",
+                  "    pm.expect(json.bankTransactionRef).to.eql(pm.environment.get(\"b2_tx_ref_unknown\"));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Demo: refunds",
+      "description": "Self-contained run of PR-07's refund flow (Collection Runner, top to bottom): an overpayment on a pending reservation (partial automatic refund of the surplus), a payment that arrives after the reservation is already confirmed (full automatic refund), and a refund the payout rail rejects (stays FAILED for a human). Fetches its own tokens (alice, bank-simulator) and books its own random dates; re-runnable any number of times.",
+      "item": [
+        {
+          "name": "1. Get token (alice)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "password",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "marvel-postman",
+                  "type": "text"
+                },
+                {
+                  "key": "username",
+                  "value": "alice",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "{{password}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{keycloak_url}}/realms/marvel/protocol/openid-connect/token",
+              "host": [
+                "{{keycloak_url}}"
+              ],
+              "path": [
+                "realms",
+                "marvel",
+                "protocol",
+                "openid-connect",
+                "token"
+              ]
+            },
+            "description": "Password grant for dev user alice (reservation:read, reservation:write; properties AMS01, RTM01). Stores access_token in the environment."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "",
+                  "pm.test(\"Response has access_token\", function () {",
+                  "    pm.expect(json.access_token).to.be.a(\"string\").and.not.empty;",
+                  "});",
+                  "",
+                  "pm.environment.set(\"access_token\", json.access_token);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "2. Book BANK_TRANSFER room 201 MEDIUM, 2 nights (240.00)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerName\": \"Refund Demo\",\n  \"roomNumber\": \"201\",\n  \"startDate\": \"{{b3_start}}\",\n  \"endDate\": \"{{b3_end}}\",\n  \"roomSegment\": \"MEDIUM\",\n  \"paymentMode\": \"BANK_TRANSFER\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{reservation_url}}/properties/AMS01/reservations",
+              "host": [
+                "{{reservation_url}}"
+              ],
+              "path": [
+                "properties",
+                "AMS01",
+                "reservations"
+              ]
+            },
+            "description": "240.00 due by bank transfer. Saves b3_reservationId for the overpayment below."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// A random 2-night stay in the 1000 years from 2030: re-runs (of this and every other demo)",
+                  "// practically never pick overlapping dates for the same room, so no 409 ROOM_UNAVAILABLE.",
+                  "const start = new Date(Date.UTC(2030, 0, 1) + Math.floor(Math.random() * 365000) * 86400000);",
+                  "const end = new Date(start.getTime() + 2 * 86400000);",
+                  "pm.environment.set(\"b3_start\", start.toISOString().slice(0, 10));",
+                  "pm.environment.set(\"b3_end\", end.toISOString().slice(0, 10));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 201\", () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"PENDING_PAYMENT, total 240.00\", () => {",
+                  "    pm.expect(json.status).to.eql(\"PENDING_PAYMENT\");",
+                  "    pm.expect(Number(json.totalAmount).toFixed(2)).to.eql(\"240.00\");",
+                  "});",
+                  "pm.environment.set(\"b3_reservationId\", json.reservationId);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "3. Get token (bank-simulator)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "client_credentials",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "bank-simulator",
+                  "type": "text"
+                },
+                {
+                  "key": "client_secret",
+                  "value": "{{bank_simulator_client_secret}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{keycloak_url}}/realms/marvel/protocol/openid-connect/token",
+              "host": [
+                "{{keycloak_url}}"
+              ],
+              "path": [
+                "realms",
+                "marvel",
+                "protocol",
+                "openid-connect",
+                "token"
+              ]
+            },
+            "description": "Client-credentials grant for the bank-simulator service account (role bank:ingest, bank:read; properties [\"*\"]). Stores access_token in the environment."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "",
+                  "pm.test(\"Response has access_token\", function () {",
+                  "    pm.expect(json.access_token).to.be.a(\"string\").and.not.empty;",
+                  "});",
+                  "",
+                  "pm.environment.set(\"access_token\", json.access_token);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "4. Bank pays 250.00 (overpayment of 10.00)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bankTransactionRef\": \"{{b3_tx_ref}}\",\n  \"debtorAccountNumber\": \"NL91ABNA0417164300\",\n  \"debtorName\": \"Refund Demo\",\n  \"amount\": 250.00,\n  \"currency\": \"EUR\",\n  \"remittanceInformation\": \"{{b3_e2e}} {{b3_reservationId}}\",\n  \"bookedAt\": \"{{b3_booked_at}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{payment_url}}/bank-transactions",
+              "host": [
+                "{{payment_url}}"
+              ],
+              "path": [
+                "bank-transactions"
+              ]
+            },
+            "description": "10.00 more than the 240.00 due: ADR-0009 confirms the reservation for the full amount received and requests a refund of the surplus, reason OVERPAYMENT."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set(\"b3_tx_ref\", \"BANK-TX-DEMO-REFUND-\" + Date.now() + \"-a\");",
+                  "pm.environment.set(\"b3_e2e\", String(Date.now()).slice(-10));",
+                  "pm.environment.set(\"b3_booked_at\", new Date().toISOString());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 202\", () => pm.response.to.have.status(202));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "5. Get token (alice)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "password",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "marvel-postman",
+                  "type": "text"
+                },
+                {
+                  "key": "username",
+                  "value": "alice",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "{{password}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{keycloak_url}}/realms/marvel/protocol/openid-connect/token",
+              "host": [
+                "{{keycloak_url}}"
+              ],
+              "path": [
+                "realms",
+                "marvel",
+                "protocol",
+                "openid-connect",
+                "token"
+              ]
+            },
+            "description": "Password grant for dev user alice (reservation:read, reservation:write; properties AMS01, RTM01). Stores access_token in the environment."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "",
+                  "pm.test(\"Response has access_token\", function () {",
+                  "    pm.expect(json.access_token).to.be.a(\"string\").and.not.empty;",
+                  "});",
+                  "",
+                  "pm.environment.set(\"access_token\", json.access_token);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "6. Reservation is CONFIRMED with 250.00 received",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{reservation_url}}/properties/AMS01/reservations/{{b3_reservationId}}",
+              "host": [
+                "{{reservation_url}}"
+              ],
+              "path": [
+                "properties",
+                "AMS01",
+                "reservations",
+                "{{b3_reservationId}}"
+              ]
+            },
+            "description": "amountReceived is the sum actually received (250.00), not capped to totalAmount: the 10.00 surplus is handled by a separate refund, not by shrinking this figure. Retries for up to ~10 s (outbox -> Debezium -> Kafka -> consumer)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const attempt = Number(pm.environment.get(\"b3_attempt\") || 0);",
+                  "const json = pm.response.json();",
+                  "const done = json.status === \"CONFIRMED\" && Number(json.amountReceived).toFixed(2) === \"250.00\";",
+                  "if (!done && attempt < 10) {",
+                  "    pm.environment.set(\"b3_attempt\", attempt + 1);",
+                  "    setTimeout(() => {}, 1000);",
+                  "    pm.execution.setNextRequest(pm.info.requestName);",
+                  "} else {",
+                  "    pm.environment.unset(\"b3_attempt\");",
+                  "    pm.test(\"status is CONFIRMED\", () => pm.expect(json.status).to.eql(\"CONFIRMED\"));",
+                  "    pm.test(\"amountReceived is 250.00\", () => pm.expect(Number(json.amountReceived).toFixed(2)).to.eql(\"250.00\"));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "7. Payments show OVERPAID with a COMPLETED refund of 10.00",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{reservation_url}}/properties/AMS01/reservations/{{b3_reservationId}}/payments",
+              "host": [
+                "{{reservation_url}}"
+              ],
+              "path": [
+                "properties",
+                "AMS01",
+                "reservations",
+                "{{b3_reservationId}}",
+                "payments"
+              ]
+            },
+            "description": "Retries until the refund the payment service raised has come back as COMPLETED. Saves b3_refund_id."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const payments = pm.response.json();",
+                  "const done = payments.length === 1 && payments[0].refund && payments[0].refund.status !== \"REQUESTED\";",
+                  "const attempt = Number(pm.environment.get(\"b3_attempt\") || 0);",
+                  "if (!done && attempt < 10) {",
+                  "    pm.environment.set(\"b3_attempt\", attempt + 1);",
+                  "    setTimeout(() => {}, 1000);",
+                  "    pm.execution.setNextRequest(pm.info.requestName);",
+                  "} else {",
+                  "    pm.environment.unset(\"b3_attempt\");",
+                  "    pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "    pm.test(\"single payment OVERPAID with a completed refund of 10.00\", () => {",
+                  "        pm.expect(payments).to.have.lengthOf(1);",
+                  "        pm.expect(payments[0].outcome).to.eql(\"OVERPAID\");",
+                  "        pm.expect(payments[0].refund).to.not.be.null;",
+                  "        pm.expect(payments[0].refund.status).to.eql(\"COMPLETED\");",
+                  "        pm.expect(Number(payments[0].refund.amount).toFixed(2)).to.eql(\"10.00\");",
+                  "        pm.expect(payments[0].refund.reason).to.eql(\"OVERPAYMENT\");",
+                  "    });",
+                  "    pm.environment.set(\"b3_refund_id\", payments[0].refund.refundId);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "8. GET the refund by refundId → EXECUTED",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{payment_url}}/refunds/{{b3_refund_id}}",
+              "host": [
+                "{{payment_url}}"
+              ],
+              "path": [
+                "refunds",
+                "{{b3_refund_id}}"
+              ]
+            },
+            "description": "The payment service's own ledger view of the same refund (bank:read; alice holds it). Its status enum differs from the reservation-side view: EXECUTED here, COMPLETED there."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"status EXECUTED, amount 10.00, reason OVERPAYMENT\", () => {",
+                  "    pm.expect(json.status).to.eql(\"EXECUTED\");",
+                  "    pm.expect(Number(json.amount).toFixed(2)).to.eql(\"10.00\");",
+                  "    pm.expect(json.reason).to.eql(\"OVERPAYMENT\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "9. Get token (bank-simulator)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "client_credentials",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "bank-simulator",
+                  "type": "text"
+                },
+                {
+                  "key": "client_secret",
+                  "value": "{{bank_simulator_client_secret}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{keycloak_url}}/realms/marvel/protocol/openid-connect/token",
+              "host": [
+                "{{keycloak_url}}"
+              ],
+              "path": [
+                "realms",
+                "marvel",
+                "protocol",
+                "openid-connect",
+                "token"
+              ]
+            },
+            "description": "Client-credentials grant for the bank-simulator service account (role bank:ingest, bank:read; properties [\"*\"]). Stores access_token in the environment."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "",
+                  "pm.test(\"Response has access_token\", function () {",
+                  "    pm.expect(json.access_token).to.be.a(\"string\").and.not.empty;",
+                  "});",
+                  "",
+                  "pm.environment.set(\"access_token\", json.access_token);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "10. Bank pays 50.00 more for the now-confirmed reservation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bankTransactionRef\": \"{{b3_tx_ref_2}}\",\n  \"debtorAccountNumber\": \"NL91ABNA0417164300\",\n  \"debtorName\": \"Refund Demo\",\n  \"amount\": 50.00,\n  \"currency\": \"EUR\",\n  \"remittanceInformation\": \"{{b3_e2e_2}} {{b3_reservationId}}\",\n  \"bookedAt\": \"{{b3_booked_at_2}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{payment_url}}/bank-transactions",
+              "host": [
+                "{{payment_url}}"
+              ],
+              "path": [
+                "bank-transactions"
+              ]
+            },
+            "description": "The reservation is already CONFIRMED (not PENDING_PAYMENT), so this money cannot be matched: ADR-0009 classifies it UNMATCHED_NOT_PENDING and refunds it in full automatically, reason OVERPAYMENT. Saves paymentId."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set(\"b3_tx_ref_2\", \"BANK-TX-DEMO-REFUND-\" + Date.now() + \"-b\");",
+                  "pm.environment.set(\"b3_e2e_2\", String(Date.now()).slice(-10));",
+                  "pm.environment.set(\"b3_booked_at_2\", new Date().toISOString());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 202\", () => pm.response.to.have.status(202));",
+                  "pm.environment.set(\"b3_extra_payment_id\", pm.response.json().paymentId);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "11. Get token (alice)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "password",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "marvel-postman",
+                  "type": "text"
+                },
+                {
+                  "key": "username",
+                  "value": "alice",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "{{password}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{keycloak_url}}/realms/marvel/protocol/openid-connect/token",
+              "host": [
+                "{{keycloak_url}}"
+              ],
+              "path": [
+                "realms",
+                "marvel",
+                "protocol",
+                "openid-connect",
+                "token"
+              ]
+            },
+            "description": "Password grant for dev user alice (reservation:read, reservation:write; properties AMS01, RTM01). Stores access_token in the environment."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "",
+                  "pm.test(\"Response has access_token\", function () {",
+                  "    pm.expect(json.access_token).to.be.a(\"string\").and.not.empty;",
+                  "});",
+                  "",
+                  "pm.environment.set(\"access_token\", json.access_token);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "12. Property's unmatched-payments view shows it as UNMATCHED_NOT_PENDING, refunded",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{reservation_url}}/properties/AMS01/unmatched-payments",
+              "host": [
+                "{{reservation_url}}"
+              ],
+              "path": [
+                "properties",
+                "AMS01",
+                "unmatched-payments"
+              ]
+            },
+            "description": "Staff follow-up view for AMS01: money that arrived after the reservation stopped awaiting payment. Retries until the payment from step 10 shows up with its refund completed."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const match = pm.response.json().find(p => p.paymentId === pm.environment.get(\"b3_extra_payment_id\"));",
+                  "const attempt = Number(pm.environment.get(\"b3_attempt\") || 0);",
+                  "const done = Boolean(match) && match.refund && match.refund.status !== \"REQUESTED\";",
+                  "if (!done && attempt < 10) {",
+                  "    pm.environment.set(\"b3_attempt\", attempt + 1);",
+                  "    setTimeout(() => {}, 1000);",
+                  "    pm.execution.setNextRequest(pm.info.requestName);",
+                  "} else {",
+                  "    pm.environment.unset(\"b3_attempt\");",
+                  "    pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "    pm.test(\"UNMATCHED_NOT_PENDING with a completed 50.00 refund\", () => {",
+                  "        pm.expect(match, \"extra payment present\").to.not.be.undefined;",
+                  "        pm.expect(match.outcome).to.eql(\"UNMATCHED_NOT_PENDING\");",
+                  "        pm.expect(match.refund).to.not.be.null;",
+                  "        pm.expect(match.refund.status).to.eql(\"COMPLETED\");",
+                  "        pm.expect(Number(match.refund.amount).toFixed(2)).to.eql(\"50.00\");",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "13. Book BANK_TRANSFER room 301 LARGE, 2 nights (360.00) — the failing refund",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerName\": \"Refund Demo (fail)\",\n  \"roomNumber\": \"301\",\n  \"startDate\": \"{{b3_fail_start}}\",\n  \"endDate\": \"{{b3_fail_end}}\",\n  \"roomSegment\": \"LARGE\",\n  \"paymentMode\": \"BANK_TRANSFER\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{reservation_url}}/properties/AMS01/reservations",
+              "host": [
+                "{{reservation_url}}"
+              ],
+              "path": [
+                "properties",
+                "AMS01",
+                "reservations"
+              ]
+            },
+            "description": "360.00 due. The next payment overpays it from a debtor account the refund stub always rejects, to show a FAILED refund needs a human (rest-api.md)."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// A random 2-night stay in the 1000 years from 2030: re-runs (of this and every other demo)",
+                  "// practically never pick overlapping dates for the same room, so no 409 ROOM_UNAVAILABLE.",
+                  "const start = new Date(Date.UTC(2030, 0, 1) + Math.floor(Math.random() * 365000) * 86400000);",
+                  "const end = new Date(start.getTime() + 2 * 86400000);",
+                  "pm.environment.set(\"b3_fail_start\", start.toISOString().slice(0, 10));",
+                  "pm.environment.set(\"b3_fail_end\", end.toISOString().slice(0, 10));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 201\", () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"PENDING_PAYMENT, total 360.00\", () => {",
+                  "    pm.expect(json.status).to.eql(\"PENDING_PAYMENT\");",
+                  "    pm.expect(Number(json.totalAmount).toFixed(2)).to.eql(\"360.00\");",
+                  "});",
+                  "pm.environment.set(\"b3_fail_reservationId\", json.reservationId);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "14. Get token (bank-simulator)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "client_credentials",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "bank-simulator",
+                  "type": "text"
+                },
+                {
+                  "key": "client_secret",
+                  "value": "{{bank_simulator_client_secret}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{keycloak_url}}/realms/marvel/protocol/openid-connect/token",
+              "host": [
+                "{{keycloak_url}}"
+              ],
+              "path": [
+                "realms",
+                "marvel",
+                "protocol",
+                "openid-connect",
+                "token"
+              ]
+            },
+            "description": "Client-credentials grant for the bank-simulator service account (role bank:ingest, bank:read; properties [\"*\"]). Stores access_token in the environment."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "",
+                  "pm.test(\"Response has access_token\", function () {",
+                  "    pm.expect(json.access_token).to.be.a(\"string\").and.not.empty;",
+                  "});",
+                  "",
+                  "pm.environment.set(\"access_token\", json.access_token);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "15. Bank pays 370.00 from a creditor account the payout rail rejects",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bankTransactionRef\": \"{{b3_fail_tx_ref}}\",\n  \"debtorAccountNumber\": \"FAIL00000000000001\",\n  \"debtorName\": \"Refund Demo (fail)\",\n  \"amount\": 370.00,\n  \"currency\": \"EUR\",\n  \"remittanceInformation\": \"{{b3_fail_e2e}} {{b3_fail_reservationId}}\",\n  \"bookedAt\": \"{{b3_fail_booked_at}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{payment_url}}/bank-transactions",
+              "host": [
+                "{{payment_url}}"
+              ],
+              "path": [
+                "bank-transactions"
+              ]
+            },
+            "description": "The refund is requested to the debtor's own account (10.00 surplus); the stub refund executor rejects any creditor account starting with FAIL (CREDITOR_ACCOUNT_REJECTED)."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set(\"b3_fail_tx_ref\", \"BANK-TX-DEMO-REFUND-\" + Date.now() + \"-fail\");",
+                  "pm.environment.set(\"b3_fail_e2e\", String(Date.now()).slice(-10));",
+                  "pm.environment.set(\"b3_fail_booked_at\", new Date().toISOString());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 202\", () => pm.response.to.have.status(202));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "16. Get token (alice)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "password",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "marvel-postman",
+                  "type": "text"
+                },
+                {
+                  "key": "username",
+                  "value": "alice",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "{{password}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{keycloak_url}}/realms/marvel/protocol/openid-connect/token",
+              "host": [
+                "{{keycloak_url}}"
+              ],
+              "path": [
+                "realms",
+                "marvel",
+                "protocol",
+                "openid-connect",
+                "token"
+              ]
+            },
+            "description": "Password grant for dev user alice (reservation:read, reservation:write; properties AMS01, RTM01). Stores access_token in the environment."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "",
+                  "pm.test(\"Response has access_token\", function () {",
+                  "    pm.expect(json.access_token).to.be.a(\"string\").and.not.empty;",
+                  "});",
+                  "",
+                  "pm.environment.set(\"access_token\", json.access_token);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "17. Payments show OVERPAID with a FAILED refund",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{reservation_url}}/properties/AMS01/reservations/{{b3_fail_reservationId}}/payments",
+              "host": [
+                "{{reservation_url}}"
+              ],
+              "path": [
+                "properties",
+                "AMS01",
+                "reservations",
+                "{{b3_fail_reservationId}}",
+                "payments"
+              ]
+            },
+            "description": "Retries until the refund attempt has come back FAILED (not left at REQUESTED). A failed refund needs a human (rest-api.md); this demo just proves it is visible, not silently lost."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const payments = pm.response.json();",
+                  "const done = payments.length === 1 && payments[0].refund && payments[0].refund.status !== \"REQUESTED\";",
+                  "const attempt = Number(pm.environment.get(\"b3_attempt\") || 0);",
+                  "if (!done && attempt < 10) {",
+                  "    pm.environment.set(\"b3_attempt\", attempt + 1);",
+                  "    setTimeout(() => {}, 1000);",
+                  "    pm.execution.setNextRequest(pm.info.requestName);",
+                  "} else {",
+                  "    pm.environment.unset(\"b3_attempt\");",
+                  "    pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "    pm.test(\"OVERPAID with a FAILED refund, CREDITOR_ACCOUNT_REJECTED\", () => {",
+                  "        pm.expect(payments).to.have.lengthOf(1);",
+                  "        pm.expect(payments[0].outcome).to.eql(\"OVERPAID\");",
+                  "        pm.expect(payments[0].refund).to.not.be.null;",
+                  "        pm.expect(payments[0].refund.status).to.eql(\"FAILED\");",
+                  "        pm.expect(payments[0].refund.failureReason).to.eql(\"CREDITOR_ACCOUNT_REJECTED\");",
+                  "    });",
+                  "    pm.environment.set(\"b3_fail_refund_id\", payments[0].refund.refundId);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "18. GET the failed refund by refundId → FAILED",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{payment_url}}/refunds/{{b3_fail_refund_id}}",
+              "host": [
+                "{{payment_url}}"
+              ],
+              "path": [
+                "refunds",
+                "{{b3_fail_refund_id}}"
+              ]
+            },
+            "description": "The payment service's own ledger agrees: FAILED, same failureReason."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"status FAILED, failureReason CREDITOR_ACCOUNT_REJECTED\", () => {",
+                  "    pm.expect(json.status).to.eql(\"FAILED\");",
+                  "    pm.expect(json.failureReason).to.eql(\"CREDITOR_ACCOUNT_REJECTED\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Demo: notifications",
+      "description": "Self-contained run of PR-08's notification consumer (Collection Runner, top to bottom): a cash and a credit-card confirmation each render their own payment-method wording, an unknown reservationId and a reservation outside the caller's properties both come back as an empty list (not an error), and a token without reservation:read is refused. The two-part bank-transfer demo above already covers the PENDING_PAYMENT / PARTIAL_PAYMENT_RECEIVED / CONFIRMED notification sequence (its step 12), so it is not repeated here. Fetches its own tokens (alice, carol, bank-simulator) and books its own random dates; re-runnable any number of times.",
+      "item": [
+        {
+          "name": "1. Get token (alice)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "password",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "marvel-postman",
+                  "type": "text"
+                },
+                {
+                  "key": "username",
+                  "value": "alice",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "{{password}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{keycloak_url}}/realms/marvel/protocol/openid-connect/token",
+              "host": [
+                "{{keycloak_url}}"
+              ],
+              "path": [
+                "realms",
+                "marvel",
+                "protocol",
+                "openid-connect",
+                "token"
+              ]
+            },
+            "description": "Password grant for dev user alice (reservation:read, reservation:write; properties AMS01, RTM01). Stores access_token in the environment."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "",
+                  "pm.test(\"Response has access_token\", function () {",
+                  "    pm.expect(json.access_token).to.be.a(\"string\").and.not.empty;",
+                  "});",
+                  "",
+                  "pm.environment.set(\"access_token\", json.access_token);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "2. Cash booking room 102 SMALL, random 2 nights (160.00)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerName\": \"Notify Demo Cash\",\n  \"roomNumber\": \"102\",\n  \"startDate\": \"{{b4_cash_start}}\",\n  \"endDate\": \"{{b4_cash_end}}\",\n  \"roomSegment\": \"SMALL\",\n  \"paymentMode\": \"CASH\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{reservation_url}}/properties/AMS01/reservations",
+              "host": [
+                "{{reservation_url}}"
+              ],
+              "path": [
+                "properties",
+                "AMS01",
+                "reservations"
+              ]
+            },
+            "description": "CASH is confirmed at booking. Saves b4_cash_reservationId."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// A random 2-night stay in the 1000 years from 2030: re-runs (of this and every other demo)",
+                  "// practically never pick overlapping dates for the same room, so no 409 ROOM_UNAVAILABLE.",
+                  "const start = new Date(Date.UTC(2030, 0, 1) + Math.floor(Math.random() * 365000) * 86400000);",
+                  "const end = new Date(start.getTime() + 2 * 86400000);",
+                  "pm.environment.set(\"b4_cash_start\", start.toISOString().slice(0, 10));",
+                  "pm.environment.set(\"b4_cash_end\", end.toISOString().slice(0, 10));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 201\", () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"status is CONFIRMED\", () => pm.expect(json.status).to.eql(\"CONFIRMED\"));",
+                  "pm.environment.set(\"b4_cash_reservationId\", json.reservationId);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "3. Notifications of the cash reservation: RESERVATION_CONFIRMED, cash wording",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{notification_url}}/notifications?reservationId={{b4_cash_reservationId}}",
+              "host": [
+                "{{notification_url}}"
+              ],
+              "path": [
+                "notifications"
+              ],
+              "query": [
+                {
+                  "key": "reservationId",
+                  "value": "{{b4_cash_reservationId}}"
+                }
+              ]
+            },
+            "description": "Retries for up to ~10 s (reservation outbox -> Debezium -> Kafka -> notification-service) then asserts the rendered text tells the guest to pay in cash at the property."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const notifications = Array.isArray(pm.response.json()) ? pm.response.json() : [];",
+                  "const attempt = Number(pm.environment.get(\"b4_attempt\") || 0);",
+                  "const done = notifications.length >= 1;",
+                  "if (!done && attempt < 10) {",
+                  "    pm.environment.set(\"b4_attempt\", attempt + 1);",
+                  "    setTimeout(() => {}, 1000);",
+                  "    pm.execution.setNextRequest(pm.info.requestName);",
+                  "} else {",
+                  "    pm.environment.unset(\"b4_attempt\");",
+                  "    pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "    pm.test(\"one RESERVATION_CONFIRMED notification, cash wording\", () => {",
+                  "        pm.expect(notifications).to.have.lengthOf(1);",
+                  "        pm.expect(notifications[0].template).to.eql(\"RESERVATION_CONFIRMED\");",
+                  "        pm.expect(notifications[0].renderedText).to.include(\"to be paid in cash at the property\");",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "4. Card booking room 401 EXTRA_LARGE (OK-… → 201 CONFIRMED)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerName\": \"Notify Demo Card\",\n  \"roomNumber\": \"401\",\n  \"startDate\": \"{{b4_card_start}}\",\n  \"endDate\": \"{{b4_card_end}}\",\n  \"roomSegment\": \"EXTRA_LARGE\",\n  \"paymentMode\": \"CREDIT_CARD\",\n  \"paymentReference\": \"{{b4_card_reference}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{reservation_url}}/properties/AMS01/reservations",
+              "host": [
+                "{{reservation_url}}"
+              ],
+              "path": [
+                "properties",
+                "AMS01",
+                "reservations"
+              ]
+            },
+            "description": "CREDIT_CARD is confirmed at booking too, via the stub. Saves b4_card_reservationId."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// A random 2-night stay in the 1000 years from 2030: re-runs (of this and every other demo)",
+                  "// practically never pick overlapping dates for the same room, so no 409 ROOM_UNAVAILABLE.",
+                  "const start = new Date(Date.UTC(2030, 0, 1) + Math.floor(Math.random() * 365000) * 86400000);",
+                  "const end = new Date(start.getTime() + 2 * 86400000);",
+                  "pm.environment.set(\"b4_card_start\", start.toISOString().slice(0, 10));",
+                  "pm.environment.set(\"b4_card_end\", end.toISOString().slice(0, 10));",
+                  "pm.environment.set(\"b4_card_reference\", \"OK-\" + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 201\", () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"status is CONFIRMED\", () => pm.expect(json.status).to.eql(\"CONFIRMED\"));",
+                  "pm.environment.set(\"b4_card_reservationId\", json.reservationId);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "5. Notifications of the card reservation: RESERVATION_CONFIRMED, card wording",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{notification_url}}/notifications?reservationId={{b4_card_reservationId}}",
+              "host": [
+                "{{notification_url}}"
+              ],
+              "path": [
+                "notifications"
+              ],
+              "query": [
+                {
+                  "key": "reservationId",
+                  "value": "{{b4_card_reservationId}}"
+                }
+              ]
+            },
+            "description": "A card confirmation quotes the real total (amountReceived is only tracked for bank transfers), so the text must never read EUR 0.00."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const notifications = Array.isArray(pm.response.json()) ? pm.response.json() : [];",
+                  "const attempt = Number(pm.environment.get(\"b4_attempt\") || 0);",
+                  "const done = notifications.length >= 1;",
+                  "if (!done && attempt < 10) {",
+                  "    pm.environment.set(\"b4_attempt\", attempt + 1);",
+                  "    setTimeout(() => {}, 1000);",
+                  "    pm.execution.setNextRequest(pm.info.requestName);",
+                  "} else {",
+                  "    pm.environment.unset(\"b4_attempt\");",
+                  "    pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "    pm.test(\"one RESERVATION_CONFIRMED notification, card wording, non-zero total\", () => {",
+                  "        pm.expect(notifications).to.have.lengthOf(1);",
+                  "        pm.expect(notifications[0].template).to.eql(\"RESERVATION_CONFIRMED\");",
+                  "        pm.expect(notifications[0].renderedText).to.include(\"paid by credit card\");",
+                  "        pm.expect(notifications[0].renderedText).to.not.include(\"EUR 0.00\");",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "6. Notifications for a reservationId that does not exist → 200 []",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{notification_url}}/notifications?reservationId={{b4_unknown_reservation_id}}",
+              "host": [
+                "{{notification_url}}"
+              ],
+              "path": [
+                "notifications"
+              ],
+              "query": [
+                {
+                  "key": "reservationId",
+                  "value": "{{b4_unknown_reservation_id}}"
+                }
+              ]
+            },
+            "description": "Valid 8-character reservationId shape, but nothing was ever booked with it: an empty list, not an error."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function randomReservationId() {",
+                  "    const alphabet = \"0123456789ABCDEFGHJKMNPQRSTVWXYZ\";",
+                  "    let id = \"P\";",
+                  "    for (let i = 0; i < 7; i++) {",
+                  "        id += alphabet[Math.floor(Math.random() * alphabet.length)];",
+                  "    }",
+                  "    return id;",
+                  "}",
+                  "pm.environment.set(\"b4_unknown_reservation_id\", randomReservationId());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"body is an empty array\", () => pm.expect(pm.response.json()).to.eql([]));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "7. Get token (carol)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "password",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "marvel-postman",
+                  "type": "text"
+                },
+                {
+                  "key": "username",
+                  "value": "carol",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "{{password}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{keycloak_url}}/realms/marvel/protocol/openid-connect/token",
+              "host": [
+                "{{keycloak_url}}"
+              ],
+              "path": [
+                "realms",
+                "marvel",
+                "protocol",
+                "openid-connect",
+                "token"
+              ]
+            },
+            "description": "Password grant for dev user carol (reservation:read, bank:read; property RTM01 only; no reservation:write). Stores access_token in the environment."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "",
+                  "pm.test(\"Response has access_token\", function () {",
+                  "    pm.expect(json.access_token).to.be.a(\"string\").and.not.empty;",
+                  "});",
+                  "",
+                  "pm.environment.set(\"access_token\", json.access_token);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "8. carol (RTM01 only) sees no notifications for the AMS01 cash reservation",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{notification_url}}/notifications?reservationId={{b4_cash_reservationId}}",
+              "host": [
+                "{{notification_url}}"
+              ],
+              "path": [
+                "notifications"
+              ],
+              "query": [
+                {
+                  "key": "reservationId",
+                  "value": "{{b4_cash_reservationId}}"
+                }
+              ]
+            },
+            "description": "The reservation from step 2 belongs to AMS01, not in carol's token properties (RTM01 only): the endpoint filters by property rather than answering 403 FORBIDDEN_PROPERTY (the path names no property), so this is 200 []."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"body is an empty array\", () => pm.expect(pm.response.json()).to.eql([]));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "9. Get token (bank-simulator)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "client_credentials",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "bank-simulator",
+                  "type": "text"
+                },
+                {
+                  "key": "client_secret",
+                  "value": "{{bank_simulator_client_secret}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{keycloak_url}}/realms/marvel/protocol/openid-connect/token",
+              "host": [
+                "{{keycloak_url}}"
+              ],
+              "path": [
+                "realms",
+                "marvel",
+                "protocol",
+                "openid-connect",
+                "token"
+              ]
+            },
+            "description": "Client-credentials grant for the bank-simulator service account (role bank:ingest, bank:read; properties [\"*\"]). Stores access_token in the environment."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "",
+                  "pm.test(\"Response has access_token\", function () {",
+                  "    pm.expect(json.access_token).to.be.a(\"string\").and.not.empty;",
+                  "});",
+                  "",
+                  "pm.environment.set(\"access_token\", json.access_token);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "10. bank-simulator (no reservation:read) → 403 FORBIDDEN",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{notification_url}}/notifications?reservationId={{b4_cash_reservationId}}",
+              "host": [
+                "{{notification_url}}"
+              ],
+              "path": [
+                "notifications"
+              ],
+              "query": [
+                {
+                  "key": "reservationId",
+                  "value": "{{b4_cash_reservationId}}"
+                }
+              ]
+            },
+            "description": "The bank-simulator service account only has bank:ingest and bank:read: it lacks the reservation:read role this endpoint requires."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"Content-Type is application/problem+json\", () => {",
+                  "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test(\"code is FORBIDDEN\", () => pm.expect(json.code).to.eql(\"FORBIDDEN\"));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "room-reservation-service",
       "item": [
         {
@@ -1141,7 +4130,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"customerName\": \"Ada Lovelace\",\n  \"roomNumber\": \"101\",\n  \"startDate\": \"2027-03-10\",\n  \"endDate\": \"2027-03-12\",\n  \"roomSegment\": \"SMALL\",\n  \"paymentMode\": \"CASH\"\n}",
+                  "raw": "{\n  \"customerName\": \"Ada Lovelace\",\n  \"roomNumber\": \"101\",\n  \"startDate\": \"{{cash_start}}\",\n  \"endDate\": \"{{cash_end}}\",\n  \"roomSegment\": \"SMALL\",\n  \"paymentMode\": \"CASH\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -1159,9 +4148,23 @@
                     "reservations"
                   ]
                 },
-                "description": "Creates a CASH reservation for property AMS01, room 101 (SMALL); CASH is confirmed immediately. Saves reservationId to the environment for later requests."
+                "description": "Creates a CASH reservation for property AMS01, room 101 (SMALL); CASH is confirmed immediately. A pre-request script picks a random 2-night stay in 2050-2059 (cash_start/cash_end) so this request can be re-run any number of times without 409 ROOM_UNAVAILABLE. Saves reservationId to the environment for later requests."
               },
               "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// A random 2-night stay in the 1000 years from 2030: re-runs (of this and every other demo)",
+                      "// practically never pick overlapping dates for the same room, so no 409 ROOM_UNAVAILABLE.",
+                      "const start = new Date(Date.UTC(2030, 0, 1) + Math.floor(Math.random() * 365000) * 86400000);",
+                      "const end = new Date(start.getTime() + 2 * 86400000);",
+                      "pm.environment.set(\"cash_start\", start.toISOString().slice(0, 10));",
+                      "pm.environment.set(\"cash_end\", end.toISOString().slice(0, 10));"
+                    ]
+                  }
+                },
                 {
                   "listen": "test",
                   "script": {
@@ -1200,7 +4203,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"customerName\": \"Ada Lovelace\",\n  \"roomNumber\": \"201\",\n  \"startDate\": \"2027-06-10\",\n  \"endDate\": \"2027-06-12\",\n  \"roomSegment\": \"MEDIUM\",\n  \"paymentMode\": \"BANK_TRANSFER\"\n}",
+                  "raw": "{\n  \"customerName\": \"Ada Lovelace\",\n  \"roomNumber\": \"201\",\n  \"startDate\": \"{{bank_start}}\",\n  \"endDate\": \"{{bank_end}}\",\n  \"roomSegment\": \"MEDIUM\",\n  \"paymentMode\": \"BANK_TRANSFER\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -1218,9 +4221,23 @@
                     "reservations"
                   ]
                 },
-                "description": "Creates a BANK_TRANSFER reservation for property AMS01, room 201 (MEDIUM): PENDING_PAYMENT with a payment deadline and bank transfer instructions. Saves reservationId to the environment for later requests."
+                "description": "Creates a BANK_TRANSFER reservation for property AMS01, room 201 (MEDIUM): PENDING_PAYMENT with a payment deadline and bank transfer instructions. A pre-request script picks a random 2-night stay in 2050-2059 (bank_start/bank_end) so this request can be re-run any number of times without 409 ROOM_UNAVAILABLE. Saves reservationId to the environment for later requests."
               },
               "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// A random 2-night stay in the 1000 years from 2030: re-runs (of this and every other demo)",
+                      "// practically never pick overlapping dates for the same room, so no 409 ROOM_UNAVAILABLE.",
+                      "const start = new Date(Date.UTC(2030, 0, 1) + Math.floor(Math.random() * 365000) * 86400000);",
+                      "const end = new Date(start.getTime() + 2 * 86400000);",
+                      "pm.environment.set(\"bank_start\", start.toISOString().slice(0, 10));",
+                      "pm.environment.set(\"bank_end\", end.toISOString().slice(0, 10));"
+                    ]
+                  }
+                },
                 {
                   "listen": "test",
                   "script": {
@@ -1248,7 +4265,7 @@
               "response": []
             },
             {
-              "name": "Create credit-card reservation (OK-123 → 201 CONFIRMED)",
+              "name": "Create credit-card reservation (OK-… → 201 CONFIRMED)",
               "request": {
                 "method": "POST",
                 "header": [
@@ -1259,7 +4276,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"customerName\": \"Ada Lovelace\",\n  \"roomNumber\": \"202\",\n  \"startDate\": \"2027-09-10\",\n  \"endDate\": \"2027-09-12\",\n  \"roomSegment\": \"MEDIUM\",\n  \"paymentMode\": \"CREDIT_CARD\",\n  \"paymentReference\": \"OK-123\"\n}",
+                  "raw": "{\n  \"customerName\": \"Ada Lovelace\",\n  \"roomNumber\": \"202\",\n  \"startDate\": \"{{card_start}}\",\n  \"endDate\": \"{{card_end}}\",\n  \"roomSegment\": \"MEDIUM\",\n  \"paymentMode\": \"CREDIT_CARD\",\n  \"paymentReference\": \"{{card_reference}}\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -1277,9 +4294,24 @@
                     "reservations"
                   ]
                 },
-                "description": "Creates a CREDIT_CARD reservation for AMS01 room 202 (MEDIUM). The reservation service first asks credit-card-payment-service for the status of paymentReference OK-123 (stub: prefix OK → CONFIRMED), then stores it CONFIRMED. Saves reservationId. Re-running it gives 409 PAYMENT_REFERENCE_ALREADY_USED (one card payment backs one reservation), without calling the payment service; change paymentReference (e.g. OK-124) and the dates to book again."
+                "description": "Creates a CREDIT_CARD reservation for AMS01 room 202 (MEDIUM). The reservation service first asks credit-card-payment-service for the status of paymentReference OK-<timestamp> (stub: prefix OK → CONFIRMED), then stores it CONFIRMED. A pre-request script picks a random 2-night stay in 2050-2059 (card_start/card_end) and a fresh paymentReference (\"OK-\" + Date.now(), env var card_reference) each run, so this request is re-runnable without 409 PAYMENT_REFERENCE_ALREADY_USED. Saves reservationId."
               },
               "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// A random 2-night stay in the 1000 years from 2030: re-runs (of this and every other demo)",
+                      "// practically never pick overlapping dates for the same room, so no 409 ROOM_UNAVAILABLE.",
+                      "const start = new Date(Date.UTC(2030, 0, 1) + Math.floor(Math.random() * 365000) * 86400000);",
+                      "const end = new Date(start.getTime() + 2 * 86400000);",
+                      "pm.environment.set(\"card_start\", start.toISOString().slice(0, 10));",
+                      "pm.environment.set(\"card_end\", end.toISOString().slice(0, 10));",
+                      "pm.environment.set(\"card_reference\", \"OK-\" + Date.now());"
+                    ]
+                  }
+                },
                 {
                   "listen": "test",
                   "script": {
@@ -1291,9 +4323,9 @@
                       "",
                       "const json = pm.response.json();",
                       "",
-                      "pm.test(\"status is CONFIRMED\", function () {",
+                      "pm.test(\"status is CONFIRMED, paymentReference matches the request\", function () {",
                       "    pm.expect(json.status).to.eql(\"CONFIRMED\");",
-                      "    pm.expect(json.paymentReference).to.eql(\"OK-123\");",
+                      "    pm.expect(json.paymentReference).to.eql(pm.environment.get(\"card_reference\"));",
                       "});",
                       "",
                       "if (pm.response.code === 201) { pm.environment.set(\"reservationId\", json.reservationId); }"
