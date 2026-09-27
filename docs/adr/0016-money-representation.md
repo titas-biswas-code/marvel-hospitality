@@ -3,7 +3,7 @@
 Status: Accepted · Date: 2026-09-26
 
 ## Context
-Reservations carry a total, an amount received and (later) refund amounts. The assignment is single-currency
+Reservations carry a total, an amount received and (later) refund amounts. The system is single-currency
 (`EUR`), amounts are compared exactly at scale 2 with no tolerance (ADR-0009), and every wire format is flat:
 REST and events expose `totalAmount` / `amountReceived` / `amount` as JSON numbers next to one `currency`
 field (contracts/rest-api.md, contracts/events.md). The database stores `numeric(12,2)` + `currency char(3)`.

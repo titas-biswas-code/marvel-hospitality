@@ -1,6 +1,6 @@
 # ADR-0015 Testing strategy
 
-Status: Accepted · Date: 2026-09-26 · Amended: 2026-09-27 (Kafka listener tests) · Corrected: 2026-09-27 (PR-11 traceability check: text aligned with the code)
+Status: Accepted · Date: 2026-09-26 · Amended: 2026-09-27 (Kafka listener tests) · Corrected: 2026-09-27 (traceability check: text aligned with the code)
 
 ## Decision
 | Layer | Tool | What is proven |
@@ -14,7 +14,7 @@ Status: Accepted · Date: 2026-09-26 · Amended: 2026-09-27 (Kafka listener test
 | Platform starters (`platform/`) | `@SpringBootTest` of a minimal app that loads the starter via its `AutoConfiguration.imports` | the shared behaviour (e.g. 401/403 codes, property checks), tested once; each service adds only a wiring test with its own settings |
 | Security | one Keycloak Testcontainers smoke test; `jwt()` post-processors elsewhere | a real token from the exported realm is accepted with its roles and properties; wrong property → 403 (`jwt()` tests in the security starter and in `ReservationControllerTest`) |
 | CDC | one Testcontainers test with Postgres+Kafka+Connect (`debezium/connect`) per outbox service | outbox row becomes a message with the right key, headers, value |
-| End-to-end | `infra/e2e/smoke.sh` against compose (BONUS in CI) | the README demo script |
+| End-to-end | `infra/e2e/smoke.sh` against compose (also run in CI) | the README demo script |
 
 Rules: no H2; no `Thread.sleep` (use Awaitility); `Clock` is a test double; small test-data factory methods per test class
 (no shared builder types); each service's `./gradlew build` runs everything without external infra.

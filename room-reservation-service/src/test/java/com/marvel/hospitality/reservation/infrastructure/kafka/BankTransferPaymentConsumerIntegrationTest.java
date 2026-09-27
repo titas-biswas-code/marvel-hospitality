@@ -414,7 +414,7 @@ class BankTransferPaymentConsumerIntegrationTest extends KafkaListenersIntegrati
         return paymentId;
     }
 
-    /** Exactly the payment service's {@code PaymentReceivedPayload}, field names verbatim from the brief. */
+    /** Exactly the payment service's {@code PaymentReceivedPayload}, field names verbatim from the topic contract. */
     private String paymentJson(String paymentId, String amount, String description) {
         return jsonMapper.writeValueAsString(Map.of(
                 "paymentId", paymentId,

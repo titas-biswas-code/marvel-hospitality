@@ -6,7 +6,7 @@ synchronously to check a card payment before confirming a `CREDIT_CARD` reservat
 no persistence: the outcome is a deterministic mapping from the `paymentReference` prefix (`OK`, `REJ`,
 `SLOW`, `ERR`, anything else) to a status, which lets a demo or manual test drive every branch of the
 consumer's client. See [ADR-0011](../docs/adr/0011-credit-card-integration.md) for the resilience policy the consumer applies
-around this call, and [the defects list](../docs/credit-card-spec-defects.md) for what was corrected in the provided spec.
+around this call, and [the defects list](../docs/credit-card-spec-defects.md) for what was corrected in the provider's spec.
 
 ## Run
 

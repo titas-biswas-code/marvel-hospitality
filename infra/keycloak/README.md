@@ -52,9 +52,9 @@ Password `password` for all three (dev only; `DEV_USER_PASSWORD` in `infra/.env`
 
 | user | roles | properties |
 |---|---|---|
-| `alice` | `reservation:read`, `reservation:write`, `bank:read` | `AMS01`, `RTM01` |
+| `alice` | `reservation:read`, `reservation:write`, `bank:read` | `AMS01`, `LIS01` |
 | `bob` | `reservation:read`, `reservation:write`, `bank:read` | `AMS01` |
-| `carol` | `reservation:read`, `bank:read` | `RTM01` |
+| `carol` | `reservation:read`, `bank:read` | `LIS01` |
 
 ## Clients
 

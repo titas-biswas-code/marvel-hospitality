@@ -68,7 +68,7 @@ class ReservationOutboxTransactionTest {
                 .containsEntry("payload_total", "520.00");
 
         String rolledBackId = transactions.execute(status -> {
-            ReservationView rolledBack = createReservation.create(new CreateReservationCommand("RTM01", "Ada Lovelace",
+            ReservationView rolledBack = createReservation.create(new CreateReservationCommand("LIS01", "Ada Lovelace",
                     "401", LocalDate.parse("2030-05-01"), LocalDate.parse("2030-05-03"), RoomSegment.EXTRA_LARGE,
                     PaymentMode.CASH, null));
             // Joins this outer transaction (REQUIRED); forcing it to roll back must take both rows with it.

@@ -1,10 +1,11 @@
 # ADR-0009 Bank-transfer payment matching rules
 
-Status: Accepted · Date: 2026-09-26 · Corrected: 2026-09-27 (PR-11 traceability check: text aligned with the code)
+Status: Accepted · Date: 2026-09-26 · Corrected: 2026-09-27 (traceability check: text aligned with the code)
 
 ## Context
 The bank event carries `transactionDescription = "<10-char E2E id> <8-char reservationId>"`, an amount,
-and a debtor account. The brief says "total amount not received" implies partial payments exist.
+and a debtor account. A reservation is cancelled when the total amount has not been received, which implies partial
+payments exist.
 
 ## Decision
 1. Persist **every** payment first (`received_payment`, PK `paymentId`) — matched or not — then classify:
@@ -26,7 +27,7 @@ and a debtor account. The brief says "total amount not received" implies partial
    reservationId. This holds by construction: ids are global, and a matched payment is stored with the property of
    the reservation its id resolved to (the bank's event carries no property to disagree with).
 6. Unmatched payments are **not** auto-refunded: a typo could still be reconciled by a human; they sit in
-   `received_payment` for a reconciliation UI (BONUS endpoint). This is a deliberate business judgement
+   `received_payment` for a reconciliation UI (the unmatched-payments endpoints). This is a deliberate business judgement
    and the README says so.
 
 ## Consequences

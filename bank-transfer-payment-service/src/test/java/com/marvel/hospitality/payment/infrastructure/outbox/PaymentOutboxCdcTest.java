@@ -33,7 +33,7 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * The whole publish path of ADR-0006/0007 for this service, against real containers: an ingested bank transaction's
  * outbox row goes through Debezium's Outbox Event Router, configured by the committed
- * {@code infra/debezium/payment-outbox.json} (not a test copy), onto the brief's {@code bank-transfer-payment-update}.
+ * {@code infra/debezium/payment-outbox.json} (not a test copy), onto the external {@code bank-transfer-payment-update} topic.
  * Same Spring context and Postgres as the other {@code @SpringBootTest}s; Kafka and Connect are started once per JVM
  * by the shared fixture.
  */
@@ -87,7 +87,7 @@ class PaymentOutboxCdcTest {
         assertThat(headers.lastHeader("propertyId")).isNotNull();
         assertThat(headers.lastHeader("propertyId").value()).isNull();
 
-        // Byte for byte what the payload column holds, with the brief's field names and the amount at scale 2.
+        // Byte for byte what the payload column holds, with the contract's field names and the amount at scale 2.
         assertThat(record.value()).isEqualTo(row.get("payload"));
         assertThat(jsonMapper.readTree(record.value())).isEqualTo(jsonMapper.readTree("""
                 {"paymentId": "%s", "debtorAccountnumber": "NL91ABNA0417164300", "amountReceived": 120.00,

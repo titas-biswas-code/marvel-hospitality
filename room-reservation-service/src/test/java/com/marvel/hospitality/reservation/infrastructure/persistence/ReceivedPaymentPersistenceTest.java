@@ -69,9 +69,9 @@ class ReceivedPaymentPersistenceTest {
     @Test
     void listsPaymentsByReservationWithoutReservationAndNotPendingPerProperty() {
         String amsReservationId = "P0000910";
-        String rtmReservationId = "P0000911";
+        String lisReservationId = "P0000911";
         reservations.add(reservation(amsReservationId, "AMS01", "201", LocalDate.parse("2036-06-01"), LocalDate.parse("2036-06-03")));
-        reservations.add(reservation(rtmReservationId, "RTM01", "201", LocalDate.parse("2036-06-01"), LocalDate.parse("2036-06-03")));
+        reservations.add(reservation(lisReservationId, "LIS01", "201", LocalDate.parse("2036-06-01"), LocalDate.parse("2036-06-03")));
 
         // Inserted out of receivedAt order, to prove the ordering comes from the query, not from insertion order.
         ReceivedPayment second = receivedPayment(amsReservationId, "AMS01", Money.eur("70.00"),
@@ -84,9 +84,9 @@ class ReceivedPaymentPersistenceTest {
                 PaymentMatchOutcome.UNMATCHED_NOT_PENDING, SOME_INSTANT.plusSeconds(120));
         payments.add(amsNotPending);
 
-        ReceivedPayment rtmNotPending = receivedPayment(rtmReservationId, "RTM01", Money.eur("40.00"),
+        ReceivedPayment lisNotPending = receivedPayment(lisReservationId, "LIS01", Money.eur("40.00"),
                 PaymentMatchOutcome.UNMATCHED_NOT_PENDING, SOME_INSTANT);
-        payments.add(rtmNotPending);
+        payments.add(lisNotPending);
 
         ReceivedPayment unmatchedFormat = unmatchedFormatPayment(Money.eur("10.00"), SOME_INSTANT);
         payments.add(unmatchedFormat);
@@ -108,7 +108,7 @@ class ReceivedPaymentPersistenceTest {
         assertThat(payments.findNotPending("AMS01"))
                 .extracting(ReceivedPayment::paymentId)
                 .contains(amsNotPending.paymentId())
-                .doesNotContain(rtmNotPending.paymentId());
+                .doesNotContain(lisNotPending.paymentId());
     }
 
     @Test

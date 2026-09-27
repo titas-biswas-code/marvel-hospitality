@@ -1,6 +1,6 @@
 # room-reservation-service
 
-The assignment's core service: creates and reads reservations, matches incoming bank payments to them,
+The core service: creates and reads reservations, matches incoming bank payments to them,
 auto-cancels bank-transfer reservations that miss their payment deadline, and requests refunds as
 compensation. Owns the Postgres database `reservation` (properties, rooms, reservations, received
 payments, refunds, its outbox and inbox tables). See

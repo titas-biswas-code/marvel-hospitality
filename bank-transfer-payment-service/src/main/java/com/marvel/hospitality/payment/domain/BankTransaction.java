@@ -26,7 +26,7 @@ public record BankTransaction(
         Instant bookedAt,
         Instant receivedAt) {
 
-    /** The only currency this assignment supports (ADR-0016). */
+    /** The only currency the system supports (ADR-0016). */
     public static final String SUPPORTED_CURRENCY = "EUR";
 
     public BankTransaction {

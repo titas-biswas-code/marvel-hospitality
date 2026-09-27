@@ -93,7 +93,7 @@ class BankTransactionControllerTest {
     }
 
     @Test
-    void ingestsNewTransactionAndWritesOutboxRowWithBriefFieldNames() throws Exception {
+    void ingestsNewTransactionAndWritesOutboxRowWithContractFieldNames() throws Exception {
         String ref = uniqueRef();
 
         MvcResult result = mvc.perform(post("/bank-transactions").with(ingestJwt())

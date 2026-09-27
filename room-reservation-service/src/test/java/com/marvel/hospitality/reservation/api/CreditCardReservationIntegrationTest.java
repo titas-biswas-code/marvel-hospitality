@@ -392,7 +392,7 @@ class CreditCardReservationIntegrationTest {
     void returns500AndPersistsNothingWhenPaymentServiceAnswersWithoutStatus() throws Exception {
         LocalDate start = LocalDate.parse("2032-01-10");
         LocalDate end = LocalDate.parse("2032-01-12");
-        // The provided spec does not declare `status` required; a 200 without it is a contract violation, not a
+        // The provider's spec does not declare `status` required; a 200 without it is a contract violation, not a
         // "payment unavailable" (so no retry and no circuit-breaker failure) and certainly not a confirmation.
         stubFor(WireMock.post(urlEqualTo(PAYMENT_STATUS_PATH))
                 .willReturn(okJson("""

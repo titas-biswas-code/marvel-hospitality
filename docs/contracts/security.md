@@ -26,11 +26,11 @@
 - Users (dev only, password `password`):
   | user | roles | properties |
   |---|---|---|
-  | `alice` | reservation:read, reservation:write, bank:read | AMS01, RTM01 |
+  | `alice` | reservation:read, reservation:write, bank:read | AMS01, LIS01 |
   | `bob` | reservation:read, reservation:write, bank:read | AMS01 |
-  | `carol` | reservation:read, bank:read | RTM01 |
+  | `carol` | reservation:read, bank:read | LIS01 |
 - Token one-liner (README + Postman pre-request script):
   `curl -s -X POST http://localhost:8180/realms/marvel/protocol/openid-connect/token -d grant_type=password -d client_id=marvel-postman -d username=alice -d password=password | jq -r .access_token`
 - Tests: `spring-security-test` `jwt()` request post-processor with `claim("properties", List.of("AMS01"))`
-  and authorities; no Keycloak container except one smoke test in PR-01.
+  and authorities; no Keycloak container except one smoke test.
 - Public endpoints: `/actuator/health/**`, `/v3/api-docs/**`, `/swagger-ui/**`, `/reference-data`.

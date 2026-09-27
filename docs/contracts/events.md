@@ -1,6 +1,6 @@
 # Event contracts
 
-Style: **flat JSON values** (no envelope) so the brief-defined topic and our topics look alike;
+Style: **flat JSON values** (no envelope) so the externally defined topic and our topics look alike;
 metadata travels in **Kafka headers**. All values are UTF-8 JSON, all timestamps ISO-8601 UTC,
 all amounts decimal numbers with 2 fraction digits (never floats in code: `BigDecimal`).
 
@@ -17,10 +17,10 @@ all amounts decimal numbers with 2 fraction digits (never floats in code: `BigDe
 
 Debezium Outbox Event Router places these from outbox columns (see `outbox-and-inbox.md`).
 
-## Topic: `bank-transfer-payment-update` (defined by the brief — do not change field names)
+## Topic: `bank-transfer-payment-update` (external contract — do not change field names)
 - Producer: `bank-transfer-payment-service`. Consumer: `room-reservation-service`.
 - Key: `paymentId`. Partitions: 3. Retention: default.
-- Value (field names verbatim from the brief, including the odd `debtorAccountnumber`):
+- Value (field names fixed by the external contract, including the odd `debtorAccountnumber`):
 ```json
 {
   "paymentId": "5c0c1e4e-3d2a-4b6f-9c1e-0a1b2c3d4e5f",
@@ -29,7 +29,7 @@ Debezium Outbox Event Router places these from outbox columns (see `outbox-and-i
   "transactionDescription": "1401541457 P4145478"
 }
 ```
-- Currency is implicitly EUR (brief has none). `eventType` header = `PaymentReceived`.
+- Currency is implicitly EUR (the contract has none). `eventType` header = `PaymentReceived`.
 
 ## Topic: `reservation-status-changed`
 - Producer: `room-reservation-service`. Consumers: `notification-service` (and anyone else).
@@ -97,7 +97,7 @@ Debezium Outbox Event Router places these from outbox columns (see `outbox-and-i
 ## Dead-letter topics
 - `<topic>.DLT`, same key, original headers plus spring-kafka's `kafka_dlt-*` exception headers.
 - Nobody consumes DLTs automatically. README documents how to inspect (kafka-ui / console consumer)
-  and how to replay (`scripts/replay-dlt.sh`, BONUS).
+  and how to replay (`scripts/replay-dlt.sh`).
 
 ## Consumer groups
 | Group | Service | Topics |

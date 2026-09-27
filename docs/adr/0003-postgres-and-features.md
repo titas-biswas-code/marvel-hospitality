@@ -1,6 +1,6 @@
 # ADR-0003 PostgreSQL, database-per-service, Flyway, and the Postgres features we lean on
 
-Status: Accepted · Date: 2026-09-26 · Corrected: 2026-09-27 (PR-11 traceability check: text aligned with the code)
+Status: Accepted · Date: 2026-09-26 · Corrected: 2026-09-27 (traceability check: text aligned with the code)
 
 ## Context
 We need transactional integrity for outbox/inbox patterns, a hard guarantee against double-booking,

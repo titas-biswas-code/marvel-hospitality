@@ -1,5 +1,5 @@
-# Build context for every service is the repo root: they need ../platform and/or ../docs/contracts at build
-# time — see infra/docker-compose.yml.
+# Build context for every service is the repo root, because they build ../platform from source (see
+# infra/docker-compose.yml). Only the service folders and platform/ are build inputs.
 **/build
 **/.gradle
 **/bin
@@ -8,7 +8,6 @@
 **/.DS_Store
 .git
 infra/.env
-# Only the contracts are build inputs (the credit-card OpenAPI spec, PR-03); ADRs, plans and Postman are not.
-docs/*
-!docs/contracts
+docs
+postman
 **/node_modules

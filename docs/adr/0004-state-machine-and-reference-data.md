@@ -1,9 +1,9 @@
 # ADR-0004 Reservation state machine in code; statuses persisted as text; reference-data endpoint
 
-Status: Accepted · Date: 2026-09-26 · Corrected: 2026-09-27 (PR-11 traceability check: text aligned with the code)
+Status: Accepted · Date: 2026-09-26 · Corrected: 2026-09-27 (traceability check: text aligned with the code)
 
 ## Context
-Statuses `PENDING_PAYMENT`, `CONFIRMED`, `CANCELLED` are fixed by the brief. A future UI should not
+Statuses `PENDING_PAYMENT`, `CONFIRMED`, `CANCELLED` are fixed by the business process. A future UI should not
 hardcode them. Someone asked whether statuses should be configurable or DB-driven.
 
 ## Decision

@@ -75,7 +75,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 /**
  * Web-layer slice test: real domain objects ({@link Reservation}, built exactly as {@code ReservationTest} builds
  * them) flow through {@link ReservationResponse#from}, only the use cases are mocked. Every authenticated request
- * uses spring-security-test's {@code jwt()} post-processor (PR-01 convention, see
+ * uses spring-security-test's {@code jwt()} post-processor (the convention, see
  * {@code SecurityWiringTest}/{@code SecurityWebMvcSliceTest}).
  */
 @WebMvcTest(controllers = {ReservationController.class, ReferenceDataController.class})
@@ -224,7 +224,7 @@ class ReservationControllerTest {
     void rejectsCreateForPropertyNotInClaim() throws Exception {
         mvc.perform(post("/properties/AMS01/reservations")
                         .with(jwt().authorities(new SimpleGrantedAuthority("reservation:write"))
-                                .jwt(j -> j.claim("properties", List.of("RTM01"))))
+                                .jwt(j -> j.claim("properties", List.of("LIS01"))))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validCashRequestJson()))
                 .andExpect(status().isForbidden())
@@ -244,7 +244,7 @@ class ReservationControllerTest {
         // wrong property -> FORBIDDEN_PROPERTY
         mvc.perform(get("/properties/AMS01/reservations/P4145478")
                         .with(jwt().authorities(new SimpleGrantedAuthority("reservation:read"))
-                                .jwt(j -> j.claim("properties", List.of("RTM01")))))
+                                .jwt(j -> j.claim("properties", List.of("LIS01")))))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("FORBIDDEN_PROPERTY"));
 
@@ -553,8 +553,8 @@ class ReservationControllerTest {
 
     @Test
     void paymentsOfAnotherPropertyIsForbidden() throws Exception {
-        // readJwt() is entitled to AMS01 only; asking for RTM01's payments must not even reach the query.
-        mvc.perform(get("/properties/RTM01/reservations/P4145478/payments").with(readJwt()))
+        // readJwt() is entitled to AMS01 only; asking for LIS01's payments must not even reach the query.
+        mvc.perform(get("/properties/LIS01/reservations/P4145478/payments").with(readJwt()))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("FORBIDDEN_PROPERTY"));
 

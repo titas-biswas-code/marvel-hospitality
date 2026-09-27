@@ -4,8 +4,8 @@ import com.marvel.hospitality.payment.domain.BankTransaction;
 import java.math.BigDecimal;
 
 /**
- * The exact {@code bank-transfer-payment-update} value (contracts/events.md), field names verbatim from the brief —
- * including {@code debtorAccountnumber} with a lower-case {@code n}, which is the brief's spelling, not a typo to fix.
+ * The exact {@code bank-transfer-payment-update} value (contracts/events.md), field names verbatim from the external topic contract —
+ * including {@code debtorAccountnumber} with a lower-case {@code n}, which is the contract's spelling, not a typo to fix.
  * No {@code propertyId}: the bank does not know one, and matching is the reservation service's job (ADR-0014).
  *
  * <p>{@code amountReceived} is a scale-2 {@code BigDecimal} written in plain notation

@@ -1,13 +1,14 @@
-# marvel-hospitality
+# Marvel Hospitality: Room Reservation System
 
-Take-home for CGI Netherlands: `room-reservation-service` and the event-driven system around it.
+An event-driven room reservation system for Marvel Hospitality, a hotel group with properties in several countries:
+Spring Boot 4 / Java 25 microservices, Postgres, Kafka with Debezium CDC, Keycloak and OpenTelemetry.
 
-The brief asks for one service: book a room for a customer, confirm it at once for cash, confirm a credit-card
-booking by asking `credit-card-payment-service`, and confirm a bank-transfer booking when the payment arrives on the
-`bank-transfer-payment-update` topic, cancelling it automatically if the money is not there two days before arrival.
-That service is here, together with the pieces that make the flow real and runnable end to end: a
-`bank-transfer-payment-service` that adapts "the bank" to the topic and pays refunds, a stub of the credit-card
-service built from the corrected spec, a `notification-service` that tells the customer about every status change,
+At its centre is `room-reservation-service`. It books a room for a customer and confirms it at once for cash,
+confirms a credit-card booking by asking the card provider's `credit-card-payment-service`, and confirms a
+bank-transfer booking when the payment arrives on the bank's `bank-transfer-payment-update` topic, cancelling it
+automatically if the money is not there two days before arrival. Around it are the pieces that make the flow real and
+runnable end to end: a `bank-transfer-payment-service` that adapts "the bank" to that topic and pays refunds, a stub
+of the card service built from its corrected spec, a `notification-service` that tells the customer about every status change,
 and one `docker compose` file that starts it all with Postgres, Kafka, Debezium, Keycloak and Grafana.
 
 The interesting part is the bank-transfer booking: it spans three services and days of wall-clock time, so there is
@@ -22,7 +23,7 @@ the code and tests that implement it.
 **Contents:** [Architecture](#architecture) · [The bank-transfer saga](#the-bank-transfer-saga) ·
 [Run it](#run-it) · [5-minute demo](#5-minute-demo) · [More demos](#more-demos) ·
 [Judgement calls](#assumptions-and-judgement-calls) · [Credit-card spec defects](#credit-card-spec-defects) ·
-[Bonus](#what-is-bonus) · [Next steps](#next-steps) · [Runbook](#runbook) · [Auto-cancel](#auto-cancel) ·
+[Beyond the core](#beyond-the-core-flow) · [Next steps](#next-steps) · [Runbook](#runbook) · [Auto-cancel](#auto-cancel) ·
 [Notifications](#notifications) · [Observability](#observability) · [Repository layout](#repository-layout) ·
 [Further reading](#further-reading)
 
@@ -77,7 +78,7 @@ flowchart LR
   ProblemDetail errors, outbox, inbox, Kafka error handling, observability) lives once in [`platform/`](platform/)
   as Spring Boot starters the services build from source (ADR-0001). Business rules never go there.
 - **No service publishes to Kafka itself.** Services write `outbox_event` rows; Debezium turns them into Kafka
-  messages keyed by aggregate id, with `traceparent` and `propertyId` headers. The brief's topic
+  messages keyed by aggregate id, with `traceparent` and `propertyId` headers. The bank's topic
   `bank-transfer-payment-update` is produced the same way by the payment service.
 - **Every service validates the JWT itself** (Keycloak, realm roles, a `properties` claim checked against the
   `propertyId` in the path, ADR-0002 and ADR-0012). There is no gateway in front.
@@ -136,8 +137,8 @@ sequenceDiagram
 ```
 
 Matching is by the 8-character reservation id in the transfer description (`"<10-char E2E id> <reservationId>"`),
-summed over all payments, so partial payments add up in any order (ADR-0009). Card bookings are synchronous, as the
-brief says: the reservation service asks the card service for the payment status and answers `201 CONFIRMED` or an
+summed over all payments, so partial payments add up in any order (ADR-0009). Card bookings are synchronous by design:
+the reservation service asks the card service for the payment status and answers `201 CONFIRMED` or an
 error, with timeouts, retries and a circuit breaker, and never holds a database transaction open during the call
 (ADR-0011).
 
@@ -162,7 +163,7 @@ make up-apps     # creates infra/.env from .env.example, builds the four service
 | Kafka Connect REST | http://localhost:8083/connectors?expand=status |
 | Postgres (`psql` via `docker compose exec postgres`) · Kafka for host tools | 5432 · 9094 |
 
-Users (password `password`): `alice` (`AMS01`, `RTM01`), `bob` (`AMS01`), `carol` (`RTM01`, read-only).
+Users (password `password`): `alice` (`AMS01`, `LIS01`), `bob` (`AMS01`), `carol` (`LIS01`, read-only).
 `make token` prints a token for alice, `make token USER=bob` for bob. Details in
 [infra/keycloak/README.md](infra/keycloak/README.md); ports, containers and resets in [infra/README.md](infra/README.md).
 
@@ -262,8 +263,8 @@ at work: change the dates.
 ## More demos
 
 Every feature has a Postman folder that runs on its own in the Collection Runner (or newman), fetches its own tokens,
-creates its own data on random dates and can be re-run any number of times. Import `docs/postman/` (collection +
-environment); details in [docs/postman/README.md](docs/postman/README.md).
+creates its own data on random dates and can be re-run any number of times. Import `postman/` (collection +
+environment); details in [postman/README.md](postman/README.md).
 
 | Feature | Postman folder | From the shell |
 |---|---|---|
@@ -282,7 +283,7 @@ Credit-card payment references drive the stub: `OK…` confirmed, `REJ…` rejec
 
 ## Assumptions and judgement calls
 
-The brief leaves these open; each is a decision, recorded in an ADR, not an accident.
+Where the requirements leave room, these are the decisions taken; each is recorded in an ADR, not an accident.
 
 - **Properties are first-class.** "Hotels" is plural and room numbers are only unique within a hotel, so rooms,
   rates and reservations belong to a property, and the property is in the URL:
@@ -306,9 +307,9 @@ The brief leaves these open; each is a decision, recorded in an ADR, not an acci
   order does not matter.
 - **One currency.** Everything is EUR with exactly two decimals, in a small `Money` value object; anything else is
   rejected (`422 UNSUPPORTED_CURRENCY` at the bank adapter). JavaMoney is the step for multi-currency (ADR-0016).
-- **Card bookings stay synchronous**, as the brief says: nothing is stored unless the card service says
+- **Card bookings stay synchronous**, as the card integration requires: nothing is stored unless the card service says
   `CONFIRMED`. If the room is taken in the moment between that answer and the insert, the guest has paid and has no
-  reservation; the provided spec has no refund operation, so this is logged at WARN "needs manual reconciliation".
+  reservation; the card provider's spec has no refund operation, so this is logged at WARN "needs manual reconciliation".
   The asynchronous saga is the proper fix (ADR-0011).
 - **Choreography, not orchestration.** The saga is short and each step has one obvious owner, so services react to
   each other's events; an orchestrator is the upgrade path if the flow grows (ADR-0006).
@@ -323,18 +324,18 @@ The brief leaves these open; each is a decision, recorded in an ADR, not an acci
 
 ## Credit-card spec defects
 
-The provided OpenAPI spec for `credit-card-payment-service` has a malformed server URL
+The card provider's OpenAPI spec for `credit-card-payment-service` has a malformed server URL
 (`http//:localhost:9090//host/…`), `format: enum` where `enum:` was meant (so generators produce a plain `String`),
 a status described as "Expiry date of the driving license", and `format: datetime` instead of `date-time`. The
 corrected spec, with none of the corrections changing anything on the wire, is what the stub serves and the client
 is generated from; the original is kept for diffing. Details:
 [docs/credit-card-spec-defects.md](docs/credit-card-spec-defects.md).
 
-## What is bonus
+## Beyond the core flow
 
-Beyond the brief, and built because a production-ready reservation flow needs them to run and be verified end to end:
-the bank-transfer payment service and simulator, the notification service, the Keycloak security, Debezium CDC and
-the observability stack. Marked bonus in the plan and done:
+Besides the booking rules themselves, the system has what a production-ready reservation flow needs to run and be
+verified end to end: the bank-transfer payment service and simulator, the notification service, Keycloak security,
+Debezium CDC and the observability stack. On top of that, operational extras:
 
 - `GET /properties/{propertyId}/unmatched-payments` and `GET /unmatched-payments`: reconciliation views.
 - `make replay-dlt TOPIC=…`: replays dead letters after the cause is fixed.
@@ -515,14 +516,15 @@ healthchecks use it); liveness does not depend on either.
 
 | Folder | What |
 |---|---|
-| [`room-reservation-service/`](room-reservation-service/) | The brief's service: reservations, payment matching, auto-cancel, refund requests. DB `reservation` |
+| [`room-reservation-service/`](room-reservation-service/) | The core service: reservations, payment matching, auto-cancel, refund requests. DB `reservation` |
 | [`bank-transfer-payment-service/`](bank-transfer-payment-service/) | Bank adapter and payment ledger: ingests bank transactions, publishes `bank-transfer-payment-update`, pays refunds. DB `payment` |
 | [`credit-card-payment-service/`](credit-card-payment-service/) | Stub of the corrected credit-card spec (in memory) |
 | [`notification-service/`](notification-service/) | Renders and logs a notification per status change. DB `notification` |
 | [`platform/`](platform/) | Spring Boot starters for the shared mechanism: security, problem details, outbox, inbox, Kafka, observability |
 | [`bank-transfer-simulator/`](bank-transfer-simulator/) | "The bank": scripts that post bank transactions |
 | [`infra/`](infra/) | `docker-compose.yml`, Keycloak realm, Debezium connectors, topics, Grafana, `e2e/smoke.sh` |
-| [`docs/`](docs/) | ADRs, contracts, Postman collection, resolved versions |
+| [`postman/`](postman/) | Postman collection and environment: a runnable demo folder per feature |
+| [`docs/`](docs/) | ADRs, contracts, resolved versions |
 
 Each service has a README with how to run and test it, its API, its messages and its configuration.
 
@@ -533,10 +535,10 @@ Each service has a README with how to run and test it, its API, its messages and
 | Design decisions (ADR index) | [docs/adr/](docs/adr/) |
 | Which code implements which ADR | [docs/adr/TRACEABILITY.md](docs/adr/TRACEABILITY.md) |
 | API, event and database contracts | [docs/contracts/](docs/contracts/) |
-| Defects in the provided credit-card spec, and the corrections | [docs/credit-card-spec-defects.md](docs/credit-card-spec-defects.md) |
+| Defects in the card provider's spec, and the corrections | [docs/credit-card-spec-defects.md](docs/credit-card-spec-defects.md) |
 | CDC durability demo (stop Kafka Connect, lose nothing) | [docs/cdc-durability-demo.md](docs/cdc-durability-demo.md) |
 | Local infrastructure, ports, connectors, runbook | [infra/README.md](infra/README.md) |
 | Keycloak realm, users, tokens | [infra/keycloak/README.md](infra/keycloak/README.md) |
 | Bank simulator scripts | [bank-transfer-simulator/README.md](bank-transfer-simulator/README.md) |
-| Postman collection | [docs/postman/README.md](docs/postman/README.md) |
+| Postman collection | [postman/README.md](postman/README.md) |
 | Resolved library and image versions | [docs/versions.md](docs/versions.md) |

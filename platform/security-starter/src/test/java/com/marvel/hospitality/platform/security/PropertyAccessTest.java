@@ -22,7 +22,7 @@ class PropertyAccessTest {
 
     @Test
     void allowsOnlyListedProperties() {
-        List<String> entitled = List.of("AMS01", "RTM01");
+        List<String> entitled = List.of("AMS01", "LIS01");
 
         assertThat(PropertyAccess.allows(entitled, "AMS01")).isTrue();
         assertThat(PropertyAccess.allows(entitled, "UTR01")).isFalse();
@@ -41,8 +41,8 @@ class PropertyAccessTest {
 
     @Test
     void readsPropertiesClaimInTokenOrder() {
-        assertThat(PropertyAccess.entitledProperties(jwt(List.of("RTM01", "AMS01", "RTM01"))))
-                .containsExactly("RTM01", "AMS01");
+        assertThat(PropertyAccess.entitledProperties(jwt(List.of("LIS01", "AMS01", "LIS01"))))
+                .containsExactly("LIS01", "AMS01");
     }
 
     @Test
@@ -56,10 +56,10 @@ class PropertyAccessTest {
     void allowedThrowsPropertyAccessDeniedForOtherProperties() {
         authenticate(List.of("AMS01"));
 
-        assertThatThrownBy(() -> propertyAccess.allowed("RTM01"))
+        assertThatThrownBy(() -> propertyAccess.allowed("LIS01"))
                 .isInstanceOf(PropertyAccessDeniedException.class)
                 .extracting(e -> ((PropertyAccessDeniedException) e).propertyId())
-                .isEqualTo("RTM01");
+                .isEqualTo("LIS01");
     }
 
     @Test

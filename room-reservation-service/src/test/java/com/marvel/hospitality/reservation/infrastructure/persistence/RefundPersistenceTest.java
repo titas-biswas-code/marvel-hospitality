@@ -53,7 +53,7 @@ class RefundPersistenceTest {
 
     private static final Instant REQUESTED_AT = Instant.parse("2038-05-01T09:00:00Z");
     private static final Instant COMPLETED_AT = Instant.parse("2038-05-01T09:00:05Z");
-    /** RTM01 room 401 in 2038, a week per fixture: no other test books it. */
+    /** LIS01 room 401 in 2038, a week per fixture: no other test books it. */
     private static final LocalDate FIRST_STAY = LocalDate.parse("2038-06-04");
     private static final AtomicInteger STAYS = new AtomicInteger();
 
@@ -151,11 +151,11 @@ class RefundPersistenceTest {
     private Refund requestedRefund(Money amount, RefundReason reason) {
         ReservationId reservationId = new ReservationIdGenerator().next();
         LocalDate start = FIRST_STAY.plusWeeks(STAYS.getAndIncrement());
-        reservations.add(Reservation.rehydrate(new ReservationState(UUID.randomUUID(), reservationId, "RTM01", "401",
+        reservations.add(Reservation.rehydrate(new ReservationState(UUID.randomUUID(), reservationId, "LIS01", "401",
                 "Ada Lovelace", new StayPeriod(start, start.plusDays(2)), RoomSegment.EXTRA_LARGE, PaymentMode.CASH,
                 null, ReservationStatus.CONFIRMED, null, Money.eur("520.00"), Money.eur("520.00"), null, 0L,
                 REQUESTED_AT, REQUESTED_AT)));
-        ReceivedPayment payment = new ReceivedPayment(UUID.randomUUID().toString(), reservationId, "RTM01",
+        ReceivedPayment payment = new ReceivedPayment(UUID.randomUUID().toString(), reservationId, "LIS01",
                 "NL91ABNA0417164300", amount, "E2E0000001 " + reservationId.value(), "E2E0000001",
                 PaymentMatchOutcome.UNMATCHED_NOT_PENDING, REQUESTED_AT);
         payments.add(payment);

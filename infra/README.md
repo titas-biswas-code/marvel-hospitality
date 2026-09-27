@@ -1,7 +1,7 @@
 # infra
 
 Local infrastructure for marvel-hospitality: Postgres, Kafka (KRaft), Kafka Connect (Debezium), Keycloak,
-Grafana `otel-lgtm`. Application services join the same compose file under the `apps` profile from PR-01
+Grafana `otel-lgtm`. Application services join the same compose file under the `apps` profile
 onward. Image and library versions: `docs/versions.md`.
 
 ## Quick start
@@ -29,21 +29,21 @@ make reset-apps                # the same, then rebuilds and starts the services
 | Kafka Connect REST | http://localhost:8083 | Debezium connectors `reservation-outbox`, `payment-outbox` (`/connectors?expand=status`) |
 | Keycloak | http://localhost:8180 | admin console at `/admin`, login `admin`/`admin`. Management/health port 9000 is **not** published to the host. |
 | Grafana (otel-lgtm) | http://localhost:3000 | Traces (Tempo), logs (Loki), metrics (Prometheus); dashboards in folder "Marvel Hospitality". Anonymous access; sign in as `admin`/`admin` to stop the "Unauthorized" toast. OTLP ingest on 4317 (gRPC) / 4318 (HTTP). |
-| room-reservation-service | 8080 | app service, added under compose profile `apps` from PR-01 |
-| bank-transfer-payment-service | 8081 | app service, added under compose profile `apps` from PR-01 |
-| credit-card-payment-service | 9090 | app service, added under compose profile `apps` in PR-03 |
-| notification-service | 8082 | app service, added under compose profile `apps` from PR-01 |
-| swagger-ui | http://localhost:8088 | unified Swagger UI with a per-service dropdown, added under compose profile `apps` from PR-01 |
+| room-reservation-service | 8080 | app service, compose profile `apps` |
+| bank-transfer-payment-service | 8081 | app service, compose profile `apps` |
+| credit-card-payment-service | 9090 | app service (stub), compose profile `apps` |
+| notification-service | 8082 | app service, compose profile `apps` |
+| swagger-ui | http://localhost:8088 | unified Swagger UI with a per-service dropdown, compose profile `apps` |
 
 ## What each container does
 
 - **postgres** (`postgres:17.11-alpine`): one instance, db-per-service. `infra/postgres/init/01-databases.sh`
   runs once on first boot and creates the `reservation`, `payment`, `notification` databases plus one role
   per database (ADR-0003). The `reservation` and `payment` roles get `REPLICATION` so Debezium can create
-  logical replication slots against them in PR-04. Server flags: `wal_level=logical`,
+  logical replication slots against them. Server flags: `wal_level=logical`,
   `max_replication_slots=4`, `max_wal_senders=4`, `max_slot_wal_keep_size=1GB` (caps WAL retained if a
   replication slot stalls, so a broken connector cannot fill the disk). `btree_gist` is **not** created by
-  the init script — it is created later by a Flyway migration (PR-02), per-database, as each service needs it.
+  the init script — it is created later by a Flyway migration, per-database, as each service needs it.
 
 - **kafka** (`apache/kafka:4.3.1`): single-node KRaft broker (no separate ZooKeeper). Automatic topic
   creation is disabled; topics are created explicitly by `kafka-init`.
@@ -110,7 +110,7 @@ regardless of which network path was used to reach it.
   returns 200 from inside the network. (The discovery document itself advertises `localhost:8180` URLs, which is
   why services must not rely on discovery for the key set.)
 
-Application services (added from PR-01) therefore set **both**:
+Application services therefore set **both**:
 
 ```yaml
 spring.security.oauth2.resourceserver.jwt.issuer-uri: http://localhost:8180/realms/marvel

@@ -33,14 +33,14 @@ class SecurityWebMvcSliceTest {
 
     @Test
     void webMvcTestSliceAppliesMarvelSecurity() throws Exception {
-        mvc.perform(get(SecuredTestController.PATH, "RTM01").with(jwt()
+        mvc.perform(get(SecuredTestController.PATH, "LIS01").with(jwt()
                         .authorities(new SimpleGrantedAuthority("reservation:read"))
-                        .jwt(j -> j.claim("properties", List.of("RTM01")))))
+                        .jwt(j -> j.claim("properties", List.of("LIS01")))))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.type").value(PROBLEM_TYPE_PREFIX + "FORBIDDEN"))
                 .andExpect(jsonPath("$.code").value("FORBIDDEN"));
 
-        mvc.perform(get(SecuredTestController.PATH, "RTM01").with(jwt()
+        mvc.perform(get(SecuredTestController.PATH, "LIS01").with(jwt()
                         .authorities(new SimpleGrantedAuthority("reservation:write"))
                         .jwt(j -> j.claim("properties", List.of("AMS01")))))
                 .andExpect(status().isForbidden())

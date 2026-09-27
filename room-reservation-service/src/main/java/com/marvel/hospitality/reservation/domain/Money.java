@@ -7,7 +7,7 @@ import java.util.Objects;
 /**
  * A monetary amount, domain-internal only: the API and event contracts (rest-api.md, events.md) keep flat
  * {@code amount} + {@code currency} fields rather than a nested object, so mapping to/from those shapes
- * happens at the edges, not here. Single-currency assignment (EUR only) is enforced by this compact
+ * happens at the edges, not here. The single currency (EUR only) is enforced by this compact
  * constructor rather than modelled with a currency-aware money library; JavaMoney/Moneta were considered and
  * rejected as disproportionate for one currency (ADR-0016).
  *
@@ -23,7 +23,7 @@ public record Money(BigDecimal amount, String currency) implements Comparable<Mo
         Objects.requireNonNull(amount, "amount");
         Objects.requireNonNull(currency, "currency");
         if (!EUR.equals(currency)) {
-            throw new IllegalArgumentException("Only EUR is supported in this assignment, got: " + currency);
+            throw new IllegalArgumentException("Only EUR is supported, got: " + currency);
         }
         if (amount.signum() < 0) {
             throw new IllegalArgumentException("amount must not be negative: " + amount);

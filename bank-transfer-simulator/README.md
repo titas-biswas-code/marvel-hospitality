@@ -144,7 +144,7 @@ automatically: a person may still match a typo.
 ./scripts/post-bank-transaction.sh --reservation P4145478 --amount 50 --currency USD
 ```
 
-`422` ProblemDetail, `code: UNSUPPORTED_CURRENCY` — this assignment is single-currency EUR (ADR/rest-api.md).
+`422` ProblemDetail, `code: UNSUPPORTED_CURRENCY` — the system is single-currency EUR (ADR/rest-api.md).
 
 ## `GET /bank-transactions/{paymentId}`
 

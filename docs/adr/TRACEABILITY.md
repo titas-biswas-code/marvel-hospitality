@@ -5,7 +5,7 @@ class or file name. `RRS` = room-reservation-service, `BTPS` = bank-transfer-pay
 notification-service, `CCPS` = credit-card-payment-service; `platform/<x>` = the `platform/<x>-starter` build.
 Anything an ADR decides but the code does not do is listed at the end as **future**, and marked so in the ADR.
 
-Checked on 2026-09-27 (PR-11). Where an ADR's wording had drifted from the code, the ADR text was corrected (listed
+Checked on 2026-09-27. Where an ADR's wording had drifted from the code, the ADR text was corrected (listed
 at the end); no code was changed for this document.
 
 ## ADR-0001 Monorepo, independent services, platform starters
@@ -22,9 +22,9 @@ at the end); no code was changed for this document.
 
 | Decision | Implemented in | Proven by |
 |---|---|---|
-| `property` table (id, name, timezone, bank account); every property-scoped row has `property_id` | RRS `V1__schema.sql`, `R__seed_reference_data.sql` (AMS01, RTM01) | `ReservationPersistenceTest` |
+| `property` table (id, name, timezone, bank account); every property-scoped row has `property_id` | RRS `V1__schema.sql`, `R__seed_reference_data.sql` (AMS01, LIS01) | `ReservationPersistenceTest` |
 | `propertyId` in the path; authorization `path ∈ token.properties` or `*`; `403 FORBIDDEN_PROPERTY` | `ReservationController`, `UnmatchedPaymentController` (`@propertyAccess.allowed(#propertyId)`); platform/security `PropertyAccess`, `SecurityProblemHandler` | `PropertyAccessTest`; `MarvelSecurityAutoConfigurationTest.propertyNotInClaimIsForbiddenProperty`; `ReservationControllerTest.rejectsCreateForPropertyNotInClaim` |
-| `propertyId` in every event value and header (not the brief's bank topic); reservation ids globally unique | Outbox `property_id` column → `propertyId` header (`infra/debezium/*.json`); `reservation_id` `UNIQUE`; `ReservationIdGenerator` + retry | `ReservationOutboxCdcTest`; `CreateReservationUseCaseTest.retriesWithNewIdOnCollision`, `failsAfterFiveCollisions` |
+| `propertyId` in every event value and header (not the external bank topic); reservation ids globally unique | Outbox `property_id` column → `propertyId` header (`infra/debezium/*.json`); `reservation_id` `UNIQUE`; `ReservationIdGenerator` + retry | `ReservationOutboxCdcTest`; `CreateReservationUseCaseTest.retriesWithNewIdOnCollision`, `failsAfterFiveCollisions` |
 | No "tenant" in code | — | `grep -ri tenant` finds nothing outside build output |
 
 ## ADR-0003 PostgreSQL features
@@ -148,16 +148,16 @@ at the end); no code was changed for this document.
 | JSON logs (ECS) with MDC `traceId`, `spanId`, `propertyId`, `reservationId`, `paymentId`, `refundId`; shipped to Loki | `LoggingContext`; `OpenTelemetryLogbackInstaller` | `LoggingContextTest`; `MarvelObservabilityAutoConfigurationTest.exportsLogRecordsWithMdcIdsAsAttributes` |
 | Metrics `reservation.created`, `reservation.autocancel.cancelled`, `payment.matched`, `refund.requested`, `kafka.dlt.messages`, `debezium.slot.lag.bytes`, tag `service` | `ReservationController`, `AutoCancelJob`, `BankTransferPaymentUpdateListener`, `DeadLetterPublisher`, `ReplicationSlotLagMonitor` | `ReservationControllerTest`, `AutoCancelJobTest`, `BankTransferPaymentConsumerIntegrationTest`, `KafkaErrorHandlingTest`, `ReplicationSlotLagMonitorTest`, `MarvelObservabilityAutoConfigurationTest.tagsEveryMeterWithServiceName` |
 | Readiness includes DB and Kafka | `management.endpoint.health.group.readiness`; Kafka indicator in platform/kafka | `ReadinessIntegrationTest` (each service) |
-| Grafana dashboards (BONUS) | `infra/grafana/dashboards/*.json` | — |
+| Grafana dashboards | `infra/grafana/dashboards/*.json` | — |
 
 ## ADR-0014 bank-transfer-payment-service and the simulator
 
 | Decision | Implemented in | Proven by |
 |---|---|---|
 | `POST /bank-transactions`, idempotent on `bankTransactionRef`; ledger with raw `jsonb` and own `paymentId` | `BankTransactionController`, `IngestBankTransactionUseCase`, BTPS `V1__schema.sql` | `BankTransactionControllerTest.duplicateBankTransactionRefReturns200SameIdAndNoNewOutboxRow`; `IngestBankTransactionConcurrencyTest` |
-| Publishes `PaymentReceived` with the brief's field names; knows nothing about reservations | `PaymentOutboxWriter`, `PaymentReceivedPayload` | `PaymentReceivedPayloadMatchesEventsContract`; `PaymentOutboxCdcTest` |
+| Publishes `PaymentReceived` with the contract's field names; knows nothing about reservations | `PaymentOutboxWriter`, `PaymentReceivedPayload` | `PaymentReceivedPayloadMatchesEventsContract`; `PaymentOutboxCdcTest` |
 | Owns refunds: inbox on `refundId`, instruction to the debtor account from its ledger, stub rail (`FAIL…` rejected), `RefundCompleted` | `RefundRequestedListener`, `ExecuteRefundUseCase`, `StubRefundExecutor` | `RefundRequestedConsumerIntegrationTest.failingAccountEmitsFailedCompletion`; `RefundCompletedCdcTest` |
-| Simulator = scripts + Postman, no build | `bank-transfer-simulator/scripts/*.sh`; `docs/postman/` | `smoke.sh` uses the scripts |
+| Simulator = scripts + Postman, no build | `bank-transfer-simulator/scripts/*.sh`; `postman/` | `smoke.sh` uses the scripts |
 
 ## ADR-0015 Testing strategy
 
@@ -188,7 +188,7 @@ at the end); no code was changed for this document.
 | ADR | What | Why not now |
 |---|---|---|
 | 0003 / 0002 | Row-level security on `property_id` | Awkward with connection pooling; doubles the test surface |
-| 0006 / 0011 | Orchestrated saga; asynchronous card payments (closes the "paid card, no reservation" gap) | The brief asks for a synchronous card flow; choreography fits the current flow |
+| 0006 / 0011 | Orchestrated saga; asynchronous card payments (closes the "paid card, no reservation" gap) | The card flow is required to be synchronous; choreography fits the current flow |
 | 0007 | Alert rules on slot lag (and on DLT count, failed refunds, overdue auto-cancel rows) | Metrics and dashboards exist; nothing pages anyone yet |
 | 0008 | KIP-848 consumer group protocol | Adopt when rebalance pauses show up in lag |
 | 0009 | Tolerance rule for bank fees | Business rule not specified |

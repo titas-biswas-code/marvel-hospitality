@@ -19,7 +19,7 @@ few well-chosen metrics.
   `payment.matched{outcome}`, `refund.requested{reason}`, `kafka.dlt.messages{topic}`,
   `debezium.slot.lag.bytes{slot}` (from `pg_replication_slots`), plus Boot's HTTP/Kafka/JDBC defaults.
 - Health: liveness/readiness groups; readiness includes DB and Kafka.
-- A provisioned Grafana dashboard JSON (`infra/grafana/dashboards/marvel.json`) is BONUS.
+- Provisioned Grafana dashboards (`infra/grafana/dashboards/*.json`).
 
 ## Consequences
 - One extra compose service instead of four.

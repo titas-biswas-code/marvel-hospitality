@@ -1,6 +1,6 @@
 # ADR-0010 Automatic cancellation scheduler
 
-Status: Accepted · Date: 2026-09-26 · Amended: 2026-09-27 (PR-06, see "Amendment")
+Status: Accepted · Date: 2026-09-26 · Amended: 2026-09-27 (see "Amendment")
 
 ## Context
 Bank-transfer reservations whose total is not received two days before the start date must be cancelled
@@ -11,8 +11,8 @@ automatically, correctly across restarts and with several instances running.
   `paymentDeadlineAt = startDate.atStartOfDay(property.timezone).minusDays(2).toInstant()`.
   "Two days before the start date" therefore means "before local midnight two calendar days earlier".
 - A bank-transfer reservation whose deadline is already in the past at creation is rejected with
-  `422 BANK_TRANSFER_LEAD_TIME_TOO_SHORT` (you cannot pay by bank transfer for tonight). Logical decision
-  the brief leaves open; alternatives (treat as cash-on-arrival, or immediate deadline) noted in README.
+  `422 BANK_TRANSFER_LEAD_TIME_TOO_SHORT` (you cannot pay by bank transfer for tonight). A decision the
+  requirements leave open; alternatives (treat as cash-on-arrival, or immediate deadline) noted in README.
 - Job: `@Scheduled(fixedDelayString = "${reservation.auto-cancel.interval:PT60S}")`. It reads due rows in pages
   **without locks**, walking forward by `(payment_deadline_at, id)`:
   ```sql
@@ -46,7 +46,7 @@ automatically, correctly across restarts and with several instances running.
 - Metrics: `reservation.autocancel.cancelled` counter (tag `propertyId`), `reservation.autocancel.overdue` gauge
   (rows still due after the last run; above zero means rows are failing or held elsewhere).
 
-## Amendment (PR-06)
+## Amendment
 The original text locked the whole batch (`SELECT ... FOR UPDATE SKIP LOCKED LIMIT 100`) and then cancelled each
 row in `REQUIRES_NEW`. Implemented as written, that deadlocks: the outer transaction keeps the row locks, and the
 inner `REQUIRES_NEW` transaction on the same thread waits for them forever. Postgres cannot detect this, because

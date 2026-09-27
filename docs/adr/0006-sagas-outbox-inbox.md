@@ -3,9 +3,8 @@
 Status: Accepted · Date: 2026-09-26
 
 ## Context
-A bank-transfer booking spans three services and hours to days of wall-clock time. The reviewer wants
-to see "an event-driven system including a distributed transaction". The honest engineering answer is
-that there is **no** distributed transaction: XA/2PC across microservices and Kafka is unavailable
+A bank-transfer booking spans three services and hours to days of wall-clock time. It looks like it
+needs a distributed transaction. The honest engineering answer is that there is **no** distributed transaction: XA/2PC across microservices and Kafka is unavailable
 (Kafka is not an XA resource) and undesirable (coordinator locks, availability coupling).
 
 ## Decision

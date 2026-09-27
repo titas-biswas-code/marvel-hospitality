@@ -34,7 +34,7 @@ public class OpenApiSecurityAutoConfiguration {
                     .type(SecurityScheme.Type.HTTP)
                     .scheme("bearer")
                     .bearerFormat("JWT")
-                    .description("Keycloak access token for realm `marvel` (see docs/postman or `make token`)."));
+                    .description("Keycloak access token for realm `marvel` (see postman or `make token`)."));
             openApi.addSecurityItem(new SecurityRequirement().addList(BEARER_AUTH));
         };
     }

@@ -1,11 +1,11 @@
 # Credit-card payment spec: defects found and corrected
 
-The provided `credit-card-payment-service` OpenAPI spec has defects. Generating a client from it as provided does
+The card provider's `credit-card-payment-service` OpenAPI spec has defects. Generating a client from it as published does
 work, but the payment status comes out as a plain `String` with no allowed values, `lastUpdateDate` as a `String`
 rather than a timestamp, and the server URL is unusable. The corrected spec lives with the code
 that uses it, in two identical copies: `credit-card-payment-service/src/main/resources/openapi/` (the stub serves it)
 and `room-reservation-service/src/main/resources/openapi/` (the client is generated from it); `make check-contracts`
-fails if they differ (ADR-0011). The spec exactly as provided is kept in
+fails if they differ (ADR-0011). The spec exactly as published is kept in
 `docs/contracts/credit-card-payment-api.original.yaml`, so every change can be checked with a diff:
 
 ```

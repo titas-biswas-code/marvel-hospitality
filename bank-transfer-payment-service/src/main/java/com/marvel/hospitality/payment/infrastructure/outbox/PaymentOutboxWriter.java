@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 /**
  * {@link PaymentEventOutbox} on the platform {@link OutboxEventWriter}: one {@code outbox_event} row in the caller's
  * transaction, published by Debezium (ADR-0006/0007). {@code property_id} is {@code null} on {@code PaymentReceived}
- * because the brief's bank topic carries none (so the {@code propertyId} header is present with a null value,
+ * because the externally defined bank topic carries none (so the {@code propertyId} header is present with a null value,
  * contracts/events.md); {@code RefundCompleted} does carry one, taken from the refund request.
  */
 @Component

@@ -1,7 +1,7 @@
 # Postman
 
-Populated from PR-01 onwards: `marvel-hospitality.postman_collection.json` and `local.postman_environment.json`.
-Later PRs only append requests to this same collection — the files are not replaced.
+Two files: `marvel-hospitality.postman_collection.json` and `local.postman_environment.json`.
+New requests are added to this same collection; the files are never replaced.
 
 ## Import
 
@@ -16,10 +16,10 @@ then select the "marvel-hospitality (local)" environment (top right).
 2. Run any other request — the collection-level auth is `Bearer {{access_token}}`, so it picks up the
    token automatically. The Auth folder's own requests are `noauth` (they are what obtains the token).
 
-`whoami` in each service folder needs any valid token; `whoami without token → 401` in
-`room-reservation-service` deliberately overrides auth to `noauth` to prove the endpoint is protected.
+`whoami` in each service folder needs any valid token; `whoami without token → 401` in each service folder
+deliberately overrides auth to `noauth` to prove the service is protected.
 
-`room-reservation-service`'s **Reservations** folder (PR-02) needs a token with `reservation:write`/
+`room-reservation-service`'s **Reservations** folder needs a token with `reservation:write`/
 `reservation:read` for property `AMS01` (alice or bob). Run "Create cash reservation", "Create bank-transfer
 reservation" or "Create credit-card reservation (OK-… → 201 CONFIRMED)" first — each saves `reservationId` to the
 environment — then "Get reservation". "Reference data (public)" needs no token at all. All three create requests
@@ -28,15 +28,17 @@ vars `cash_start`/`cash_end`, `bank_start`/`bank_end`, `card_start`/`card_end`),
 on `409 ROOM_UNAVAILABLE`; the credit-card request also mints a fresh `paymentReference` ("OK-" + `Date.now()`,
 env var `card_reference`) each run so it never collides on `409 PAYMENT_REFERENCE_ALREADY_USED` either.
 
-The other two **credit-card** requests (PR-03) need `make up-apps` (it includes `credit-card-payment-service`).
+The other two **credit-card** requests need `make up-apps` (it includes `credit-card-payment-service`).
 The stub decides by `paymentReference` prefix: `REJ-1` → `422 PAYMENT_REJECTED` (nothing stored, repeatable).
 "payment service unavailable → 503" is always a 503 and never books: with the stub up its `SLOW-1` reference
 outlasts the read timeout (~6.5 s over three attempts); stop the stub (command in its description) to see the
 connection-failure path instead. The **credit-card-payment-service** folder calls the stub directly, without a
 token (the spec declares no security, ADR-0011); it uses the `credit_card_url` environment variable.
+Its four requests show each outcome of the stub: `OK-123` → `CONFIRMED`, `REJ-1` → `REJECTED`, `ERR-1` → `500`,
+and an unknown reference → `404`.
 
 `notification-service`'s **Notifications** folder needs `reservation:read`, and only shows notifications of the
-properties in the token (alice has both; bob only AMS01, carol only RTM01). It reads `reservationId` from the
+properties in the token (alice has both; bob only AMS01, carol only LIS01). It reads `reservationId` from the
 environment, same as the reservation folder above — run a "Create ..." reservation request first. "List notifications
 without reservationId → 400 VALIDATION_FAILED" needs only any valid token. "List notifications without
 reservation:read → 403" needs a token that lacks the role: run "Get token (bank-simulator, client credentials)" from
@@ -71,16 +73,16 @@ number of times.
 
 ## Demo: booking rules
 
-The folder **"Demo: booking rules"** (PR-02/PR-03) runs the creation-time rules end to end:
+The folder **"Demo: booking rules"** runs the creation-time rules end to end:
 
 1. alice books room 102 (SMALL, AMS01) on a random 2-night stay; the exact same request repeated, and an
    overlapping one, both answer `409 ROOM_UNAVAILABLE`: the database's exclusion constraint refuses the overlap (ADR-0005).
 2. The same room and dates with `roomSegment: MEDIUM` → `422 ROOM_SEGMENT_MISMATCH` (checked before availability).
 3. `endDate == startDate` → `400 VALIDATION_FAILED`; `roomNumber: "999"` → `404 ROOM_NOT_FOUND`; a bank-transfer
    stay starting tomorrow → `422 BANK_TRANSFER_LEAD_TIME_TOO_SHORT` (less than the required two-day lead).
-4. The booked reservation looked up under `RTM01` instead of `AMS01` → `404 RESERVATION_NOT_FOUND`.
-5. bob (property `AMS01` only) booking at `RTM01` → `403 FORBIDDEN_PROPERTY`; carol (no `reservation:write`)
-   booking at `RTM01` → `403 FORBIDDEN`: the role is checked before the property.
+4. The booked reservation looked up under `LIS01` instead of `AMS01` → `404 RESERVATION_NOT_FOUND`.
+5. bob (property `AMS01` only) booking at `LIS01` → `403 FORBIDDEN_PROPERTY`; carol (no `reservation:write`)
+   booking at `LIS01` → `403 FORBIDDEN`: the role is checked before the property.
 6. alice books room 401 (EXTRA_LARGE) by credit card with a fresh `OK-…` reference → `201 CONFIRMED`; the same
    reference on different dates → `409 PAYMENT_REFERENCE_ALREADY_USED`; a `REJ-…` reference →
    `422 PAYMENT_REJECTED`.
@@ -89,7 +91,7 @@ Every error assertion checks the status code, `Content-Type: application/problem
 
 ## Demo: unmatched payments
 
-The folder **"Demo: unmatched payments"** (PR-05) shows the reconciliation view for money that never resolved to
+The folder **"Demo: unmatched payments"** shows the reconciliation view for money that never resolved to
 a reservation (ADR-0009): the bank-simulator posts a well-formed remittance naming a reservationId that does not
 exist (`202`, outcome `UNMATCHED_UNKNOWN_RESERVATION`) and an unparseable one (`202`, outcome `UNMATCHED_FORMAT`).
 `GET /unmatched-payments` (role `bank:read`, no property check — the bank topic carries no `propertyId`) retries
@@ -98,7 +100,7 @@ these are never auto-refunded, unlike the property-scoped view below.
 
 ## Demo: refunds
 
-The folder **"Demo: refunds"** (PR-07) runs the automatic-refund paths end to end:
+The folder **"Demo: refunds"** runs the automatic-refund paths end to end:
 
 1. alice books room 201 (MEDIUM, 240.00, `BANK_TRANSFER`); the bank pays 250.00. The reservation confirms with
    `amountReceived` 250.00 (the sum actually received, not capped to the total); the payment's outcome is
@@ -113,7 +115,7 @@ The folder **"Demo: refunds"** (PR-07) runs the automatic-refund paths end to en
 
 ## Demo: notifications
 
-The folder **"Demo: notifications"** (PR-08) shows the notification consumer beyond the two-part demo's sequence:
+The folder **"Demo: notifications"** shows the notification consumer beyond the two-part demo's sequence:
 a cash and a credit-card confirmation each render their payment method's own wording ("to be paid in cash at the
 property" / "paid by credit card", and the card text is asserted to never read "EUR 0.00"); a reservationId that
 was never booked, and a reservation outside the caller's token properties, both come back `200 []` rather than an
@@ -121,40 +123,40 @@ error (the endpoint filters by property, since its path names none); and a token
 (bank-simulator) gets `403 FORBIDDEN`. The `PENDING_PAYMENT` / `PARTIAL_PAYMENT_RECEIVED` / `CONFIRMED` bank-transfer
 sequence is already covered by the two-part demo's step 12, so it is not repeated here.
 
-Auto-cancel (PR-06) has no Postman demo: seeing it fire needs the stored payment deadline moved backwards in the
+Auto-cancel has no Postman demo: seeing it fire needs the stored payment deadline moved backwards in the
 database, which is out of scope for an HTTP-only collection. See the root README's
 [Auto-cancel → See it happen](../../README.md#see-it-happen) section instead.
 
 ## Newman (CLI)
 
 ```
-npx --yes newman run docs/postman/marvel-hospitality.postman_collection.json \
-  -e docs/postman/local.postman_environment.json --folder Auth
+npx --yes newman run postman/marvel-hospitality.postman_collection.json \
+  -e postman/local.postman_environment.json --folder Auth
 
-npx --yes newman run docs/postman/marvel-hospitality.postman_collection.json \
-  -e docs/postman/local.postman_environment.json --folder "Demo: bank transfer paid in two parts"
+npx --yes newman run postman/marvel-hospitality.postman_collection.json \
+  -e postman/local.postman_environment.json --folder "Demo: bank transfer paid in two parts"
 
-npx --yes newman run docs/postman/marvel-hospitality.postman_collection.json \
-  -e docs/postman/local.postman_environment.json --folder "Demo: booking rules"
+npx --yes newman run postman/marvel-hospitality.postman_collection.json \
+  -e postman/local.postman_environment.json --folder "Demo: booking rules"
 
-npx --yes newman run docs/postman/marvel-hospitality.postman_collection.json \
-  -e docs/postman/local.postman_environment.json --folder "Demo: unmatched payments"
+npx --yes newman run postman/marvel-hospitality.postman_collection.json \
+  -e postman/local.postman_environment.json --folder "Demo: unmatched payments"
 
-npx --yes newman run docs/postman/marvel-hospitality.postman_collection.json \
-  -e docs/postman/local.postman_environment.json --folder "Demo: refunds"
+npx --yes newman run postman/marvel-hospitality.postman_collection.json \
+  -e postman/local.postman_environment.json --folder "Demo: refunds"
 
-npx --yes newman run docs/postman/marvel-hospitality.postman_collection.json \
-  -e docs/postman/local.postman_environment.json --folder "Demo: notifications"
+npx --yes newman run postman/marvel-hospitality.postman_collection.json \
+  -e postman/local.postman_environment.json --folder "Demo: notifications"
 ```
 
 Run against a live `infra` (`make up`) to get real tokens; against the application folders it also needs
 `make up-apps`. The **Reservations** folder needs a token first, e.g.:
 
 ```
-npx --yes newman run docs/postman/marvel-hospitality.postman_collection.json \
-  -e docs/postman/local.postman_environment.json --folder "Get token (alice)" \
+npx --yes newman run postman/marvel-hospitality.postman_collection.json \
+  -e postman/local.postman_environment.json --folder "Get token (alice)" \
   --export-environment /tmp/marvel-env.json
 
-npx --yes newman run docs/postman/marvel-hospitality.postman_collection.json \
+npx --yes newman run postman/marvel-hospitality.postman_collection.json \
   -e /tmp/marvel-env.json --folder "Reservations"
 ```

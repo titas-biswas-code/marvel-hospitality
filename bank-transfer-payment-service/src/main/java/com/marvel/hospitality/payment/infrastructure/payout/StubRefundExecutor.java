@@ -6,7 +6,7 @@ import com.marvel.hospitality.payment.domain.RefundInstruction;
 import org.springframework.stereotype.Component;
 
 /**
- * The only payout rail this assignment has (ADR-0014): deterministic and local, so {@link
+ * The only payout rail so far (ADR-0014): deterministic and local, so {@link
  * com.marvel.hospitality.payment.application.ExecuteRefundUseCase} may call it inside the consumer's own database
  * transaction (see {@link RefundExecutor}'s javadoc for why a real rail could not).
  */

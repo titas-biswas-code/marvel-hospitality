@@ -144,7 +144,7 @@ class ReservationPersistenceTest {
 
         // Last: the violation aborts this test's Postgres transaction, so nothing may query after it.
         // Different property, different room and dates: only the reference is shared, and that alone is rejected.
-        assertThatThrownBy(() -> reservations.add(paidReservation("P0000041", "RTM01", "202",
+        assertThatThrownBy(() -> reservations.add(paidReservation("P0000041", "LIS01", "202",
                 LocalDate.parse("2034-02-10"), LocalDate.parse("2034-02-12"), PaymentMode.CREDIT_CARD, "OK-UNIQUE-1")))
                 .isInstanceOf(PaymentReferenceAlreadyUsedException.class)
                 .hasMessageContaining("OK-UNIQUE-1");
@@ -192,7 +192,7 @@ class ReservationPersistenceTest {
     void sameDatesOnSameRoomNumberInAnotherPropertyAreAllowed() {
         reservations.add(reservation("P0000007", "AMS01", "201", LocalDate.parse("2030-04-01"), LocalDate.parse("2030-04-04")));
 
-        reservations.add(reservation("P0000008", "RTM01", "201", LocalDate.parse("2030-04-01"), LocalDate.parse("2030-04-04")));
+        reservations.add(reservation("P0000008", "LIS01", "201", LocalDate.parse("2030-04-01"), LocalDate.parse("2030-04-04")));
     }
 
     @Test
@@ -239,20 +239,20 @@ class ReservationPersistenceTest {
     void findDoesNotReturnAReservationOfAnotherProperty() {
         reservations.add(reservation("P0000012", "AMS01", "101", LocalDate.parse("2030-08-01"), LocalDate.parse("2030-08-03")));
 
-        assertThat(reservations.find("RTM01", ReservationId.of("P0000012"))).isEmpty();
+        assertThat(reservations.find("LIS01", ReservationId.of("P0000012"))).isEmpty();
         assertThat(reservations.find("AMS01", ReservationId.of("P0000012"))).isPresent();
     }
 
     @Test
     void findForUpdateFindsByReservationIdAcrossProperties() {
-        reservations.add(reservation("P0000954", "RTM01", "101", LocalDate.parse("2036-01-05"), LocalDate.parse("2036-01-08")));
+        reservations.add(reservation("P0000954", "LIS01", "101", LocalDate.parse("2036-01-05"), LocalDate.parse("2036-01-08")));
 
         // findForUpdate takes only the business id (ADR-0009: the bank topic carries no propertyId), unlike
         // find(propertyId, reservationId) which is scoped.
         Optional<Reservation> found = reservations.findForUpdate(ReservationId.of("P0000954"));
 
         assertThat(found).isPresent();
-        assertThat(found.get().propertyId()).isEqualTo("RTM01");
+        assertThat(found.get().propertyId()).isEqualTo("LIS01");
     }
 
     @Test
@@ -406,7 +406,7 @@ class ReservationPersistenceTest {
         AtomicReference<@Nullable Exception> bFailure = new AtomicReference<>();
 
         Thread threadA = new Thread(() -> transactions.executeWithoutResult(status -> {
-            reservations.add(reservation("P00000A0", "RTM01", roomNumber, start, end));
+            reservations.add(reservation("P00000A0", "LIS01", roomNumber, start, end));
             successes.incrementAndGet();
             aInserted.countDown();
             await(releaseA);
@@ -417,7 +417,7 @@ class ReservationPersistenceTest {
             bAboutToInsert.countDown();
             try {
                 transactions.executeWithoutResult(status ->
-                        reservations.add(reservation("P00000B0", "RTM01", roomNumber, start, end)));
+                        reservations.add(reservation("P00000B0", "LIS01", roomNumber, start, end)));
                 successes.incrementAndGet();
             } catch (Exception ex) {
                 bFailure.set(ex);
