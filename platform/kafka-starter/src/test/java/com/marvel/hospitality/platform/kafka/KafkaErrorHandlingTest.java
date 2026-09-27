@@ -3,6 +3,7 @@ package com.marvel.hospitality.platform.kafka;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
+import com.marvel.hospitality.platform.kafka.test.ListenerAssignments;
 import com.marvel.hospitality.platform.kafka.testapp.TestApplication;
 import com.marvel.hospitality.platform.kafka.testapp.TestListener;
 import com.marvel.hospitality.platform.outbox.cdc.DebeziumCdc;
@@ -22,6 +23,7 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Header;
 import org.jspecify.annotations.Nullable;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -64,6 +66,12 @@ class KafkaErrorHandlingTest {
 
     @Autowired
     ConsumerFactory<?, ?> consumerFactory;
+
+    /** Attempt counts are only exact once no rebalance can interrupt a retry sequence. */
+    @BeforeEach
+    void allPartitionsAreAssigned() {
+        ListenerAssignments.awaitFullyAssigned(registry, 3, TIMEOUT);
+    }
 
     @Test
     void listenerContainerAcknowledgesManuallyAndConsumerNeverAutoCommits() {

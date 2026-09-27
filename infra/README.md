@@ -13,6 +13,7 @@ make token USER=alice          # password-grant access token for a dev user (bob
 make client-token CLIENT=bank-simulator   # client-credentials token for a service account
 make down                      # stops everything (infra and `apps`), keeps volumes
 make reset                     # wipes ALL volumes (postgres, kafka, keycloak) and brings infra back up
+make reset-apps                # the same, then rebuilds and starts the services and registers the connectors
 ```
 
 `infra/.env` is a local file, created once from `infra/.env.example` by the `up` target (or by hand:

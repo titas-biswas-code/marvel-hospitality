@@ -65,7 +65,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ImportAutoConfiguration(FlywayAutoConfiguration.class)
 @Import({TestcontainersConfiguration.class, JpaReservationRepositoryAdapter.class, JpaPropertyCatalogAdapter.class,
-        JpaReceivedPaymentRepositoryAdapter.class})
+        JpaReceivedPaymentRepositoryAdapter.class, JpaRefundRepositoryAdapter.class})
 class ReservationPersistenceTest {
 
     private static final Instant SOME_INSTANT = Instant.parse("2026-09-26T10:00:00Z");

@@ -18,7 +18,8 @@ CREATE TABLE bank_transaction (
   raw                   jsonb         NOT NULL
 );
 
--- Refund execution (PR-07 fills it; created here so V1 is the whole contract schema).
+-- Refund instructions (ADR-0014): one row per refund-requested accepted for a known payment, paid back to that
+-- payment's original debtor account. A request for an unknown payment has no row (the foreign key forbids it).
 CREATE TABLE refund_instruction (
   refund_id              uuid          PRIMARY KEY,
   payment_id             uuid          NOT NULL REFERENCES bank_transaction(payment_id),
@@ -54,7 +55,7 @@ CREATE INDEX outbox_event_created_at_idx ON outbox_event (created_at);
 
 CREATE TABLE processed_message (
   message_id   varchar(64)  NOT NULL,
-  consumer     varchar(64)  NOT NULL,    -- consumer group / listener name
+  consumer     varchar(64)  NOT NULL,    -- fixed name of the consuming listener, never the consumer group
   topic        varchar(128) NOT NULL,
   processed_at timestamptz  NOT NULL DEFAULT now(),
   PRIMARY KEY (message_id, consumer)

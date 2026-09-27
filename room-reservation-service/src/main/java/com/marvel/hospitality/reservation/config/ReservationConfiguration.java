@@ -1,6 +1,7 @@
 package com.marvel.hospitality.reservation.config;
 
 import com.marvel.hospitality.reservation.application.ApplyBankPaymentUseCase;
+import com.marvel.hospitality.reservation.application.CompleteRefundUseCase;
 import com.marvel.hospitality.reservation.application.CreateReservationUseCase;
 import com.marvel.hospitality.reservation.application.CreditCardPaymentClient;
 import com.marvel.hospitality.reservation.application.CreditCardPaymentVerification;
@@ -11,7 +12,9 @@ import com.marvel.hospitality.reservation.application.PaymentVerification;
 import com.marvel.hospitality.reservation.application.PropertyCatalog;
 import com.marvel.hospitality.reservation.application.ReceivedPaymentQueries;
 import com.marvel.hospitality.reservation.application.ReceivedPaymentRepository;
+import com.marvel.hospitality.reservation.application.RefundCompletionInbox;
 import com.marvel.hospitality.reservation.application.RefundPolicy;
+import com.marvel.hospitality.reservation.application.RefundRepository;
 import com.marvel.hospitality.reservation.application.ReservationRepository;
 import com.marvel.hospitality.reservation.domain.BankTransferPaymentModeHandler;
 import com.marvel.hospitality.reservation.domain.CashPaymentModeHandler;
@@ -35,7 +38,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  * Wires the Spring-free domain and application classes. Payment modes plug in as {@link PaymentModeHandler} beans
  * collected into a map (ADR-0004): adding a mode is one class plus one bean, with no switch to edit. A mode that must
  * check its payment remotely before storing (credit card, ADR-0011) adds a {@link PaymentVerification} bean too.
- * Bank payments arriving over Kafka are applied by {@link ApplyBankPaymentUseCase} (ADR-0009).
+ * Bank payments arriving over Kafka are applied by {@link ApplyBankPaymentUseCase} (ADR-0009); money that has to go
+ * back is requested by {@link RefundPolicy} and its outcome recorded by {@link CompleteRefundUseCase} (ADR-0006).
  */
 @Configuration(proxyBeanMethods = false)
 class ReservationConfiguration {
@@ -91,6 +95,11 @@ class ReservationConfiguration {
     }
 
     @Bean
+    RefundPolicy refundPolicy(RefundRepository refunds, OutboxWriter outbox, Clock clock) {
+        return new RefundPolicy(refunds, outbox, clock);
+    }
+
+    @Bean
     ApplyBankPaymentUseCase applyBankPaymentUseCase(PaymentInbox inbox, PaymentMatcher matcher,
             ReservationRepository reservations, ReceivedPaymentRepository payments, OutboxWriter outbox,
             RefundPolicy refundPolicy, TransactionTemplate transactions, Clock clock) {
@@ -99,9 +108,15 @@ class ReservationConfiguration {
     }
 
     @Bean
+    CompleteRefundUseCase completeRefundUseCase(RefundCompletionInbox inbox, RefundRepository refunds,
+            TransactionTemplate transactions) {
+        return new CompleteRefundUseCase(inbox, refunds, transactions);
+    }
+
+    @Bean
     ReceivedPaymentQueries receivedPaymentQueries(PropertyCatalog catalog, ReservationRepository reservations,
-            ReceivedPaymentRepository payments) {
-        return new ReceivedPaymentQueries(catalog, reservations, payments);
+            ReceivedPaymentRepository payments, RefundRepository refunds) {
+        return new ReceivedPaymentQueries(catalog, reservations, payments, refunds);
     }
 
     private static <T> Map<PaymentMode, T> byMode(List<T> strategies, Function<T, PaymentMode> modeOf) {

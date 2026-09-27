@@ -7,14 +7,19 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.marvel.hospitality.reservation.MockJwtDecoderConfiguration;
+import com.marvel.hospitality.reservation.application.PaymentWithRefund;
 import com.marvel.hospitality.reservation.application.PropertyNotFoundException;
 import com.marvel.hospitality.reservation.application.ReceivedPaymentQueries;
 import com.marvel.hospitality.reservation.domain.Money;
 import com.marvel.hospitality.reservation.domain.PaymentMatchOutcome;
 import com.marvel.hospitality.reservation.domain.ReceivedPayment;
+import com.marvel.hospitality.reservation.domain.Refund;
+import com.marvel.hospitality.reservation.domain.RefundDue;
+import com.marvel.hospitality.reservation.domain.RefundReason;
 import com.marvel.hospitality.reservation.domain.ReservationId;
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -80,14 +85,20 @@ class UnmatchedPaymentControllerTest {
 
     @Test
     void listsNotPendingPaymentsOfProperty() throws Exception {
-        given(queries.notPendingOfProperty("AMS01")).willReturn(List.of(notPendingPayment()));
+        ReceivedPayment payment = notPendingPayment();
+        Refund refund = Refund.request(UUID.fromString("e4c1f295-0ab1-4d2c-9f3e-7a2e3d4c5b6a"), payment,
+                new RefundDue(payment.amount(), RefundReason.RESERVATION_CANCELLED), payment.receivedAt());
+        given(queries.notPendingOfProperty("AMS01")).willReturn(List.of(new PaymentWithRefund(payment, refund)));
 
         mvc.perform(get("/properties/AMS01/unmatched-payments").with(readJwt()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].paymentId").value("6d1d2f5f-4e3b-5c7f-ad2f-1b2c3d4e5f6a"))
                 .andExpect(jsonPath("$[0].reservationId").value("P4145478"))
                 .andExpect(jsonPath("$[0].propertyId").value("AMS01"))
-                .andExpect(jsonPath("$[0].outcome").value("UNMATCHED_NOT_PENDING"));
+                .andExpect(jsonPath("$[0].outcome").value("UNMATCHED_NOT_PENDING"))
+                .andExpect(jsonPath("$[0].refund.refundId").value("e4c1f295-0ab1-4d2c-9f3e-7a2e3d4c5b6a"))
+                .andExpect(jsonPath("$[0].refund.reason").value("RESERVATION_CANCELLED"))
+                .andExpect(jsonPath("$[0].refund.status").value("REQUESTED"));
     }
 
     @Test
@@ -101,7 +112,8 @@ class UnmatchedPaymentControllerTest {
 
     @Test
     void listsPaymentsWithoutReservationForBankReaders() throws Exception {
-        given(queries.withoutReservation()).willReturn(List.of(paymentWithoutReservation()));
+        given(queries.withoutReservation())
+                .willReturn(List.of(new PaymentWithRefund(paymentWithoutReservation(), null)));
 
         // bankReadJwt() carries properties: [AMS01], but this endpoint has no property check at all.
         MvcResult result = mvc.perform(get("/unmatched-payments").with(bankReadJwt()))
@@ -112,7 +124,8 @@ class UnmatchedPaymentControllerTest {
 
         assertThat(result.getResponse().getContentAsString())
                 .contains("\"reservationId\":null")
-                .contains("\"propertyId\":null");
+                .contains("\"propertyId\":null")
+                .contains("\"refund\":null");
     }
 
     @Test

@@ -6,8 +6,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doCallRealMethod;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mockingDetails;
@@ -16,22 +15,15 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.marvel.hospitality.platform.outbox.cdc.DebeziumCdc;
-import com.marvel.hospitality.reservation.KafkaTestcontainersConfiguration;
-import com.marvel.hospitality.reservation.MockJwtDecoderConfiguration;
-import com.marvel.hospitality.reservation.TestcontainersConfiguration;
+import com.marvel.hospitality.reservation.KafkaListenersIntegrationTest;
 import com.marvel.hospitality.reservation.application.ApplyBankPaymentCommand;
-import com.marvel.hospitality.reservation.application.ApplyBankPaymentUseCase;
 import com.marvel.hospitality.reservation.application.CreateReservationCommand;
 import com.marvel.hospitality.reservation.application.CreateReservationUseCase;
-import com.marvel.hospitality.reservation.application.RefundPolicy;
 import com.marvel.hospitality.reservation.application.ReservationRepository;
 import com.marvel.hospitality.reservation.domain.CancellationReason;
-import com.marvel.hospitality.reservation.domain.Money;
 import com.marvel.hospitality.reservation.domain.PaymentMatchOutcome;
 import com.marvel.hospitality.reservation.domain.PaymentMode;
 import com.marvel.hospitality.reservation.domain.ReceivedPayment;
-import com.marvel.hospitality.reservation.domain.RefundDue;
-import com.marvel.hospitality.reservation.domain.RefundReason;
 import com.marvel.hospitality.reservation.domain.Reservation;
 import com.marvel.hospitality.reservation.domain.ReservationId;
 import com.marvel.hospitality.reservation.domain.ReservationIdGenerator;
@@ -41,7 +33,6 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
-import java.time.Duration;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -51,21 +42,14 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.Header;
 import org.jspecify.annotations.Nullable;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InOrder;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.annotation.Import;
 import org.springframework.dao.TransientDataAccessResourceException;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.kafka.listener.MessageListenerContainer;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -74,28 +58,19 @@ import tools.jackson.databind.json.JsonMapper;
  * The bank-transfer payment consumer end to end against a real broker and database: a test {@code KafkaTemplate}
  * produces exactly what the payment service's outbox publishes, the listener applies it, and the tests read the
  * effects from the tables and the outbox (the Debezium leg is covered by the CDC tests). Every ADR-0009 outcome and
- * every ADR-0008 failure path has a test here.
+ * every ADR-0008 failure path has a test here, and so does the refund each outcome makes due (ADR-0006: requested in
+ * the payment's own transaction).
  *
- * <p>Spies on the use case (a plain object, so the spy wraps the real thing) count attempts and inject failures; the
- * refund port is spied to see what would be refunded. Retry waits are milliseconds (test profile), the number of
- * attempts is the production one. Each test books its own stay and uses fresh payment ids, so nothing is cleaned up
- * and the shared database needs no truncation. No sleeps: every wait is an Awaitility condition.
+ * <p>The spies of {@link KafkaListenersIntegrationTest} count attempts and inject failures. Retry waits are
+ * milliseconds (test profile), the number of attempts is the production one. Each test books its own stay and uses
+ * fresh payment ids, so nothing is cleaned up and the shared database needs no truncation. No sleeps: every wait is an
+ * Awaitility condition.
  */
-@SpringBootTest(properties = "spring.kafka.listener.auto-startup=true")
-@Import({TestcontainersConfiguration.class, KafkaTestcontainersConfiguration.class, MockJwtDecoderConfiguration.class})
-@ActiveProfiles("test")
-class BankTransferPaymentConsumerIntegrationTest {
+class BankTransferPaymentConsumerIntegrationTest extends KafkaListenersIntegrationTest {
 
-    private static final Duration TIMEOUT = Duration.ofSeconds(30);
     /** Stays in 2035, three nights each, a week apart: no other test class books that year. */
     private static final LocalDate FIRST_STAY = LocalDate.parse("2035-01-01");
     private static final AtomicInteger STAYS = new AtomicInteger();
-
-    @MockitoSpyBean
-    ApplyBankPaymentUseCase applyBankPayment;
-
-    @MockitoSpyBean
-    RefundPolicy refundPolicy;
 
     @Autowired
     KafkaTemplate<String, String> kafkaTemplate;
@@ -120,22 +95,6 @@ class BankTransferPaymentConsumerIntegrationTest {
 
     @Autowired
     MeterRegistry meterRegistry;
-
-    @Autowired
-    KafkaListenerEndpointRegistry listenerRegistry;
-
-    /**
-     * The three consumer threads join the group one after another, and each join rebalances. A retry sequence
-     * interrupted by a rebalance restarts its attempt count on the new owner, so attempt-counting tests would be
-     * flaky. Wait until all three partitions are assigned first.
-     */
-    @BeforeEach
-    void allPartitionsAreAssigned() {
-        MessageListenerContainer container =
-                listenerRegistry.getListenerContainer(BankTransferPaymentUpdateListener.LISTENER_ID);
-        await().atMost(TIMEOUT).until(() -> container.getAssignedPartitions() != null
-                && container.getAssignedPartitions().size() == 3);
-    }
 
     @Test
     void fullPaymentConfirmsReservationAndEmitsStatusEvent() {
@@ -218,6 +177,7 @@ class BankTransferPaymentConsumerIntegrationTest {
                 .containsEntry("e2e_id", null)
                 .containsEntry("transaction_description", "thanks for the lovely room");
         verify(refundPolicy, never()).refundDue(any(), any());
+        assertThat(refundsOf(paymentId)).isEmpty();
     }
 
     @Test
@@ -232,10 +192,11 @@ class BankTransferPaymentConsumerIntegrationTest {
                 .containsEntry("property_id", null)
                 .containsEntry("e2e_id", "1401541457");
         verify(refundPolicy, never()).refundDue(any(), any());
+        assertThat(refundsOf(paymentId)).isEmpty();
     }
 
     @Test
-    void paymentForCancelledReservationIsStoredAsNotPending() {
+    void paymentAfterCancellationRequestsFullRefund() {
         String reservationId = bankTransferReservation();
         cancel(reservationId);
 
@@ -247,8 +208,7 @@ class BankTransferPaymentConsumerIntegrationTest {
                 .containsEntry("property_id", "AMS01");
         assertThat(reservation(reservationId)).containsEntry("status", "CANCELLED")
                 .containsEntry("amount_received", new BigDecimal("0.00"));
-        verify(refundPolicy).refundDue(paymentWithId(paymentId),
-                eq(new RefundDue(Money.eur("240.00"), RefundReason.RESERVATION_CANCELLED)));
+        assertRefundRequested(paymentId, reservationId, "240.00", "RESERVATION_CANCELLED");
     }
 
     @Test
@@ -261,12 +221,15 @@ class BankTransferPaymentConsumerIntegrationTest {
         assertThat(payment(paymentId)).containsEntry("outcome", "UNMATCHED_NOT_PENDING");
         assertThat(reservation(reservationId)).containsEntry("status", "CONFIRMED")
                 .containsEntry("amount_received", new BigDecimal("0.00"));
-        verify(refundPolicy).refundDue(paymentWithId(paymentId),
-                eq(new RefundDue(Money.eur("240.00"), RefundReason.OVERPAYMENT)));
+        assertRefundRequested(paymentId, reservationId, "240.00", "OVERPAYMENT");
     }
 
+    /**
+     * The payment, the confirmation, the refund and both events are written by one transaction; the rollback case
+     * that proves it is {@link #failureAfterRefundIsWrittenRollsBackPaymentAndRefundTogether()}.
+     */
     @Test
-    void overpaymentConfirmsAndRequestsSurplusRefund() {
+    void overpaymentRequestsRefundOfSurplusInSameTransaction() {
         String reservationId = bankTransferReservation();
 
         String paymentId = pay("250.00", "1401541457 " + reservationId);
@@ -276,8 +239,34 @@ class BankTransferPaymentConsumerIntegrationTest {
         assertThat(reservation(reservationId)).containsEntry("status", "CONFIRMED")
                 .containsEntry("amount_received", new BigDecimal("250.00"));
         assertThat(lastStatusEvent(reservationId).get("reason").asString()).isEqualTo("PAYMENT_RECEIVED");
-        verify(refundPolicy).refundDue(paymentWithId(paymentId),
-                eq(new RefundDue(Money.eur("10.00"), RefundReason.OVERPAYMENT)));
+        assertRefundRequested(paymentId, reservationId, "10.00", "OVERPAYMENT");
+    }
+
+    /**
+     * A failure after the refund row and its outbox row were written (injected right after the real refund policy ran)
+     * rolls back everything the payment's transaction wrote: no payment, no refund, no refund event, no confirmation.
+     * The message is retried and dead-lettered like any technical failure, so nothing is half-applied.
+     */
+    @Test
+    void failureAfterRefundIsWrittenRollsBackPaymentAndRefundTogether() {
+        String reservationId = bankTransferReservation();
+        String paymentId = UUID.randomUUID().toString();
+        doAnswer(invocation -> {
+            invocation.callRealMethod();
+            throw new TransientDataAccessResourceException("injected: failure after the refund was written");
+        }).when(refundPolicy).refundDue(paymentWithId(paymentId), any());
+
+        send(paymentId, paymentJson(paymentId, "250.00", "1401541457 " + reservationId));
+        DebeziumCdc.awaitRecord(BANK_DLT, paymentId, TIMEOUT);
+
+        assertThat(invocations(paymentId)).isEqualTo(5);
+        assertThat(jdbc.sql("SELECT count(*) FROM received_payment WHERE payment_id = :id").param("id", paymentId)
+                .query(Long.class).single()).isZero();
+        assertThat(refundsOf(paymentId)).isEmpty();
+        assertThat(refundRequestedEvents(paymentId)).isEmpty();
+        assertThat(reservation(reservationId)).containsEntry("status", "PENDING_PAYMENT")
+                .containsEntry("amount_received", new BigDecimal("0.00"));
+        assertThat(statusEventReasons(reservationId)).containsExactly("null");
     }
 
     @Test
@@ -450,6 +439,50 @@ class BankTransferPaymentConsumerIntegrationTest {
     private Map<String, Object> payment(String paymentId) {
         return jdbc.sql("SELECT * FROM received_payment WHERE payment_id = :id").param("id", paymentId)
                 .query().singleRow();
+    }
+
+    private List<Map<String, Object>> refundsOf(String paymentId) {
+        return jdbc.sql("SELECT * FROM refund WHERE payment_id = :id").param("id", paymentId).query().listOfRows();
+    }
+
+    private List<Map<String, Object>> refundRequestedEvents(String paymentId) {
+        return jdbc.sql("""
+                        SELECT aggregate_type, topic, property_id, payload::text AS payload FROM outbox_event
+                         WHERE aggregate_id = :id AND event_type = 'RefundRequested'
+                        """)
+                .param("id", paymentId).query().listOfRows();
+    }
+
+    /**
+     * One {@code REQUESTED} refund for the payment and one {@code RefundRequested} outbox row keyed by the payment id
+     * (events.md), carrying the same refund.
+     */
+    private void assertRefundRequested(String paymentId, String reservationId, String amount, String reason) {
+        List<Map<String, Object>> refunds = refundsOf(paymentId);
+        assertThat(refunds).hasSize(1);
+        Map<String, Object> refund = refunds.getFirst();
+        assertThat(refund).containsEntry("reservation_id", reservationId)
+                .containsEntry("property_id", "AMS01")
+                .containsEntry("amount", new BigDecimal(amount))
+                .containsEntry("currency", "EUR")
+                .containsEntry("reason", reason)
+                .containsEntry("status", "REQUESTED")
+                .containsEntry("failure_reason", null)
+                .containsEntry("completed_at", null);
+
+        List<Map<String, Object>> events = refundRequestedEvents(paymentId);
+        assertThat(events).hasSize(1);
+        assertThat(events.getFirst()).containsEntry("aggregate_type", "refund")
+                .containsEntry("topic", "refund-requested")
+                .containsEntry("property_id", "AMS01");
+        JsonNode payload = jsonMapper.readTree((String) events.getFirst().get("payload"));
+        assertThat(payload.get("refundId").asString()).isEqualTo(refund.get("refund_id").toString());
+        assertThat(payload.get("paymentId").asString()).isEqualTo(paymentId);
+        assertThat(payload.get("reservationId").asString()).isEqualTo(reservationId);
+        assertThat(payload.get("propertyId").asString()).isEqualTo("AMS01");
+        assertThat(payload.get("amount").decimalValue()).isEqualByComparingTo(amount);
+        assertThat(payload.get("currency").asString()).isEqualTo("EUR");
+        assertThat(payload.get("reason").asString()).isEqualTo(reason);
     }
 
     private Map<String, Object> reservation(String reservationId) {

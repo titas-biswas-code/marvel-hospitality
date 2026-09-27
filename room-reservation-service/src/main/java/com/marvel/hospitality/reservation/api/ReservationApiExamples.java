@@ -248,7 +248,29 @@ final class ReservationApiExamples {
                 "outcome": "MATCHED_PARTIAL",
                 "transactionDescription": "1401541457 P4145478",
                 "debtorAccountNumber": "NL91ABNA0417164300",
-                "receivedAt": "2026-10-01T09:15:02Z"
+                "receivedAt": "2026-10-01T09:15:02Z",
+                "refund": null
+              },
+              {
+                "paymentId": "7d1e2f30-4b5c-4d6e-8f90-a1b2c3d4e5f6",
+                "reservationId": "P4145478",
+                "propertyId": "AMS01",
+                "amount": 150.00,
+                "currency": "EUR",
+                "outcome": "OVERPAID",
+                "transactionDescription": "1401541458 P4145478",
+                "debtorAccountNumber": "NL91ABNA0417164300",
+                "receivedAt": "2026-10-02T11:40:10Z",
+                "refund": {
+                  "refundId": "d3b07384-d9a0-4c9b-8e2f-6f1d2c3b4a59",
+                  "amount": 30.00,
+                  "currency": "EUR",
+                  "reason": "OVERPAYMENT",
+                  "status": "COMPLETED",
+                  "failureReason": null,
+                  "requestedAt": "2026-10-02T11:40:10Z",
+                  "completedAt": "2026-10-02T11:40:12Z"
+                }
               }
             ]""";
 
@@ -263,7 +285,17 @@ final class ReservationApiExamples {
                 "outcome": "UNMATCHED_NOT_PENDING",
                 "transactionDescription": "1401541457 P4145478",
                 "debtorAccountNumber": "NL91ABNA0417164300",
-                "receivedAt": "2026-10-05T09:15:02Z"
+                "receivedAt": "2026-10-05T09:15:02Z",
+                "refund": {
+                  "refundId": "e4c1f295-0ab1-4d2c-9f3e-7a2e3d4c5b6a",
+                  "amount": 240.00,
+                  "currency": "EUR",
+                  "reason": "RESERVATION_CANCELLED",
+                  "status": "REQUESTED",
+                  "failureReason": null,
+                  "requestedAt": "2026-10-05T09:15:02Z",
+                  "completedAt": null
+                }
               }
             ]""";
 
@@ -278,7 +310,8 @@ final class ReservationApiExamples {
                 "outcome": "UNMATCHED_FORMAT",
                 "transactionDescription": "thank you",
                 "debtorAccountNumber": "NL91ABNA0417164300",
-                "receivedAt": "2026-10-06T09:15:02Z"
+                "receivedAt": "2026-10-06T09:15:02Z",
+                "refund": null
               }
             ]""";
 

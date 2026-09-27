@@ -10,4 +10,7 @@ public interface PaymentEventOutbox {
 
     /** {@code PaymentReceived} on {@code bank-transfer-payment-update} (contracts/events.md). */
     void paymentReceived(BankTransaction transaction);
+
+    /** {@code RefundCompleted} on {@code refund-completed} (contracts/events.md). */
+    void refundCompleted(RefundCompletion completion);
 }

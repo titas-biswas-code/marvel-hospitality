@@ -10,10 +10,10 @@ TOKEN_USER := $(if $(filter command line,$(origin USER)),$(USER),alice)
 PASSWORD   ?= password
 CLIENT     ?= bank-simulator
 
-.PHONY: help build-all test-all check-contracts up up-apps down clean logs reset token client-token replay-dlt
+.PHONY: help build-all test-all check-contracts up up-apps down clean logs reset reset-apps token client-token replay-dlt
 
 help:
-	@echo "build-all | test-all | check-contracts | up | up-apps | down | clean | logs | reset | token USER=alice | client-token CLIENT=bank-simulator | replay-dlt TOPIC=bank-transfer-payment-update [MAX=N] [DRY_RUN=1]"
+	@echo "build-all | test-all | check-contracts | up | up-apps | down | clean | logs | reset | reset-apps | token USER=alice | client-token CLIENT=bank-simulator | replay-dlt TOPIC=bank-transfer-payment-update [MAX=N] [DRY_RUN=1]"
 
 # The credit-card spec exists twice on purpose: the provider's copy (served by the stub) and the consumer's copy (the
 # reservation service generates its client from it). Each service builds from its own file; this keeps them identical.
@@ -65,6 +65,12 @@ clean: $(ENV_FILE)
 reset: $(ENV_FILE)
 	$(COMPOSE) --profile apps down -v --remove-orphans
 	$(COMPOSE) up -d --wait
+
+# `reset` for the whole stack: wipes every volume, then rebuilds and starts the infra and the services, and registers
+# the connectors (up-apps). Needed after an already-applied Flyway migration was edited during development.
+reset-apps: $(ENV_FILE)
+	$(COMPOSE) --profile apps down -v --remove-orphans
+	$(MAKE) up-apps
 
 # Access token for a dev user (password grant via the public marvel-postman client).
 token:

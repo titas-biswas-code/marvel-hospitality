@@ -1,8 +1,8 @@
 package com.marvel.hospitality.reservation.domain;
 
 /**
- * Why a refund was requested. Refund creation itself is PR-07 scope; this PR only needs the type as reference
- * data (served via {@code GET /reference-data}) and as {@code refund.reason}'s check constraint values.
+ * Why a {@link Refund} was requested (ADR-0009). Also served as reference data ({@code GET /reference-data}) and
+ * mirrored by {@code refund.reason}'s check constraint.
  */
 public enum RefundReason {
     OVERPAYMENT,

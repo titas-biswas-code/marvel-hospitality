@@ -4,7 +4,7 @@
 -- aligned with those contracts' constraints, column names and types; do not "improve" it here.
 
 -- Testcontainers databases never run the compose init script, and the compose init script deliberately
--- does not create this extension either (PR-00 note) -- it must be the first statement here.
+-- does not create this extension either, so it must be the first statement here.
 CREATE EXTENSION IF NOT EXISTS btree_gist;
 
 CREATE TABLE property (
@@ -109,7 +109,7 @@ CREATE INDEX outbox_event_created_at_idx ON outbox_event (created_at);
 
 CREATE TABLE processed_message (
   message_id   varchar(64)  NOT NULL,
-  consumer     varchar(64)  NOT NULL,    -- consumer group / listener name
+  consumer     varchar(64)  NOT NULL,    -- fixed name of the consuming listener, never the consumer group
   topic        varchar(128) NOT NULL,
   processed_at timestamptz  NOT NULL DEFAULT now(),
   PRIMARY KEY (message_id, consumer)

@@ -39,7 +39,7 @@ import org.springframework.context.annotation.Import;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ImportAutoConfiguration(FlywayAutoConfiguration.class)
 @Import({TestcontainersConfiguration.class, JpaReservationRepositoryAdapter.class, JpaPropertyCatalogAdapter.class,
-        JpaReceivedPaymentRepositoryAdapter.class})
+        JpaReceivedPaymentRepositoryAdapter.class, JpaRefundRepositoryAdapter.class})
 class ReceivedPaymentPersistenceTest {
 
     private static final Instant SOME_INSTANT = Instant.parse("2036-05-01T09:00:00Z");

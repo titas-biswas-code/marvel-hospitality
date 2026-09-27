@@ -16,7 +16,8 @@ Local environment (Postgres, Kafka, Debezium, Keycloak, Grafana): see `infra/REA
 | Bank payments: `bank-transfer-payment-service` ledger with idempotent `POST /bank-transactions`; its outbox and the reservation outbox published to Kafka by Debezium (ADR-0007, ADR-0014); bank simulator scripts | done |
 | Payment matching: the reservation service consumes the bank topic idempotently; partial payments add up, the full amount confirms, every payment is stored with its outcome (ADR-0009). Technical failures are retried, then dead-lettered to `<topic>.DLT` (ADR-0008); watch `kafka.dlt.messages` and replay with `make replay-dlt TOPIC=…` (needs `python3`). Payments that name no known reservation are **not** refunded automatically: they wait in `GET /unmatched-payments` so a typo can still be reconciled by a person | done |
 | Auto-cancel: bank-transfer reservations still `PENDING_PAYMENT` at their deadline — local midnight two days before arrival in the property's timezone — are cancelled by a job that is safe with any number of instances (per-row `FOR UPDATE SKIP LOCKED`) and after restarts (the deadline is data); a status event carries reason `PAYMENT_DEADLINE_MISSED`; a payment arriving afterwards is kept as `UNMATCHED_NOT_PENDING` (ADR-0010) | done |
-| Refunds, notifications, observability | next |
+| Refunds (the saga's compensation, ADR-0006): an overpayment's surplus, or a payment that arrives after cancellation or on a paid reservation, becomes a refund request in the same transaction as the payment; the payment service pays it back to the original debtor account (stub rail: accounts starting with `FAIL` are rejected) and answers on `refund-completed`. Both consumers are idempotent on `refundId`. Payment rows show their refund's status; `GET /refunds/{refundId}` on the payment service. A failed refund is logged at ERROR and counted (`refund.failed`) for a person to act on | done |
+| Notifications, observability | next |
 
 ## Run it
 
@@ -32,11 +33,14 @@ The first run takes a few minutes (image builds). Then:
 - Postman: import `docs/postman/` (collection + environment) and run the folder **"Demo: bank transfer paid in two
   parts"**: book, pay half (still `PENDING_PAYMENT`), pay the rest (`CONFIRMED`). See `docs/postman/README.md`.
 - Swagger UI per service, e.g. http://localhost:8080/swagger-ui.html, or all of them at http://localhost:8088.
-- Pay as "the bank" from the shell: `bank-transfer-simulator/` (see its README).
+- Pay as "the bank" from the shell: `bank-transfer-simulator/` (see its README). To see a refund, overpay:
+  `bank-transfer-simulator/scripts/pay-in-full.sh --property AMS01 --reservation <id> --extra 10`, then the
+  reservation's payments show the surplus refund going `REQUESTED` → `COMPLETED`.
 
 ```
 make down        # stop everything, keep the data
 make clean       # remove containers, volumes (all data) and the built images; the next `make up-apps` starts from scratch
+make reset-apps  # wipe all data and start everything again, rebuilt (e.g. after pulling an edited migration)
 ```
 
 ## Auto-cancel

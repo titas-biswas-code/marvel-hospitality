@@ -48,7 +48,7 @@ class UnmatchedPaymentController {
     @Operation(summary = "List a property's UNMATCHED_NOT_PENDING payments",
             description = "Payments that arrived for one of this property's reservations after it stopped "
                     + "awaiting payment (cancelled, or already confirmed). Refunded automatically (ADR-0009); "
-                    + "this view is for staff follow-up.")
+                    + "each row carries its refund's status, and this view is for staff follow-up.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "OK",
                     content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,

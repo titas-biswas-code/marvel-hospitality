@@ -338,6 +338,11 @@ class AutoCancelIntegrationTest {
         assertThat(reservationRow(reservationId)).containsEntry("status", "CANCELLED");
         verify(refundPolicy).refundDue(paymentWithId(paymentId),
                 eq(new RefundDue(total, RefundReason.RESERVATION_CANCELLED)));
+        assertThat(jdbc.sql("SELECT reason, status, amount FROM refund WHERE payment_id = :id").param("id", paymentId)
+                .query().singleRow())
+                .containsEntry("reason", "RESERVATION_CANCELLED")
+                .containsEntry("status", "REQUESTED")
+                .containsEntry("amount", total.amount());
     }
 
     // --- fixtures -----------------------------------------------------------------------------------------------

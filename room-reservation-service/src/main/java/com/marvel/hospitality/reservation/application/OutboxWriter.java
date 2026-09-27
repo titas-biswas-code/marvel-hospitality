@@ -1,5 +1,6 @@
 package com.marvel.hospitality.reservation.application;
 
+import com.marvel.hospitality.reservation.domain.RefundRequested;
 import com.marvel.hospitality.reservation.domain.ReservationStatusChanged;
 
 /**
@@ -10,4 +11,6 @@ import com.marvel.hospitality.reservation.domain.ReservationStatusChanged;
 public interface OutboxWriter {
 
     void append(ReservationStatusChanged event);
+
+    void append(RefundRequested event);
 }

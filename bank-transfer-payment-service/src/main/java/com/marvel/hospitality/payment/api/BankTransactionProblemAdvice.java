@@ -1,6 +1,7 @@
 package com.marvel.hospitality.payment.api;
 
 import com.marvel.hospitality.payment.application.BankTransactionNotFoundException;
+import com.marvel.hospitality.payment.application.RefundNotFoundException;
 import com.marvel.hospitality.payment.domain.UnsupportedCurrencyException;
 import com.marvel.hospitality.platform.problem.Problems;
 import jakarta.servlet.http.HttpServletRequest;
@@ -12,10 +13,10 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /**
- * Maps this service's exceptions to rest-api.md's codes. Ordered ahead of platform/problem-starter's fallback advice
- * ({@link Problems#SERVICE_ADVICE_ORDER}), which already answers bean-validation and malformed-body errors with
- * {@code 400 VALIDATION_FAILED}. No catch-all handler here, so Spring Security's denials still reach the security
- * starter's 401/403 handling.
+ * Maps this service's exceptions (the ledger's and the refund saga's) to rest-api.md's codes. Ordered ahead of
+ * platform/problem-starter's fallback advice ({@link Problems#SERVICE_ADVICE_ORDER}), which already answers
+ * bean-validation and malformed-body errors with {@code 400 VALIDATION_FAILED}. No catch-all handler here, so Spring
+ * Security's denials still reach the security starter's 401/403 handling.
  */
 @RestControllerAdvice
 @Order(Problems.SERVICE_ADVICE_ORDER)
@@ -29,6 +30,11 @@ class BankTransactionProblemAdvice {
     @ExceptionHandler(BankTransactionNotFoundException.class)
     ProblemDetail handleNotFound(BankTransactionNotFoundException ex, HttpServletRequest request) {
         return problem(HttpStatus.NOT_FOUND, ProblemCodes.BANK_TRANSACTION_NOT_FOUND, ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(RefundNotFoundException.class)
+    ProblemDetail handleRefundNotFound(RefundNotFoundException ex, HttpServletRequest request) {
+        return problem(HttpStatus.NOT_FOUND, ProblemCodes.REFUND_NOT_FOUND, ex.getMessage(), request);
     }
 
     private static ProblemDetail problem(HttpStatus status, String code, String detail, HttpServletRequest request) {

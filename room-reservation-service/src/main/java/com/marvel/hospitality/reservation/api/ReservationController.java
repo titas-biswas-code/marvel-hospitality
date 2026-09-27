@@ -164,7 +164,9 @@ class ReservationController {
     @GetMapping("/{reservationId}/payments")
     @PreAuthorize("hasAuthority('reservation:read') and @propertyAccess.allowed(#propertyId)")
     @Operation(summary = "List the payments received for a reservation",
-            description = "Every received_payment row matched to this reservation (ADR-0009), in receipt order.")
+            description = "Every received_payment row matched to this reservation (ADR-0009), in receipt order, each "
+                    + "with the refund it triggered (overpayment surplus, or payment after cancellation) and that "
+                    + "refund's status, or refund = null.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "OK",
                     content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
