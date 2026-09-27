@@ -35,6 +35,7 @@ Every later PR reuses these exact versions. Do not bump without a commit that on
 | grafana/otel-lgtm image | grafana/otel-lgtm:0.34.0 | 2026-09-26 | https://hub.docker.com/r/grafana/otel-lgtm/tags |
 | eclipse-temurin runtime image | eclipse-temurin:25-jre-noble | 2026-09-26 | Docker Hub. Used as the final stage in each service `Dockerfile`. |
 | gradle build image | gradle:9.8.0-jdk25-noble | 2026-09-26 | Docker Hub. Used as the build stage in each service `Dockerfile`; matches the Gradle wrapper version above. |
+| GitHub Actions (CI) | `actions/checkout@v7` (7.0.1), `actions/setup-java@v6` (6.0.1), `gradle/actions/setup-gradle@v6` (6.3.0), `actions/upload-artifact@v7` (7.0.1) | 2026-09-27 | Latest releases on GitHub; pinned to the major version in `.github/workflows/ci.yml` (PR-11). Runner `ubuntu-24.04`. `setup-gradle` uses `cache-provider: basic` (MIT) rather than the default commercial caching library. |
 
 ## Boot 4 artifact names used (vs Boot 3)
 

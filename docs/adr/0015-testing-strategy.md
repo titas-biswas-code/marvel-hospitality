@@ -1,6 +1,6 @@
 # ADR-0015 Testing strategy
 
-Status: Accepted · Date: 2026-09-26 · Amended: 2026-09-27 (Kafka listener tests)
+Status: Accepted · Date: 2026-09-26 · Amended: 2026-09-27 (Kafka listener tests) · Corrected: 2026-09-27 (PR-11 traceability check: text aligned with the code)
 
 ## Decision
 | Layer | Tool | What is proven |
@@ -12,12 +12,12 @@ Status: Accepted · Date: 2026-09-26 · Amended: 2026-09-27 (Kafka listener test
 | Kafka | `@SpringBootTest` + Testcontainers Kafka | consumer idempotency (same paymentId twice), retry then DLT, poison message goes to DLT |
 | HTTP client | WireMock | `CONFIRMED`/`REJECTED`/`404`/`500`/timeout, retry counts, circuit opens |
 | Platform starters (`platform/`) | `@SpringBootTest` of a minimal app that loads the starter via its `AutoConfiguration.imports` | the shared behaviour (e.g. 401/403 codes, property checks), tested once; each service adds only a wiring test with its own settings |
-| Security | one Keycloak Testcontainers smoke test | a real token from the exported realm is accepted; wrong property → 403 |
+| Security | one Keycloak Testcontainers smoke test; `jwt()` post-processors elsewhere | a real token from the exported realm is accepted with its roles and properties; wrong property → 403 (`jwt()` tests in the security starter and in `ReservationControllerTest`) |
 | CDC | one Testcontainers test with Postgres+Kafka+Connect (`debezium/connect`) per outbox service | outbox row becomes a message with the right key, headers, value |
 | End-to-end | `infra/e2e/smoke.sh` against compose (BONUS in CI) | the README demo script |
 
-Rules: no H2; no `Thread.sleep` (use Awaitility); `Clock` is a test double; test data builders per
-aggregate; each service's `./gradlew build` runs everything without external infra.
+Rules: no H2; no `Thread.sleep` (use Awaitility); `Clock` is a test double; small test-data factory methods per test class
+(no shared builder types); each service's `./gradlew build` runs everything without external infra.
 
 Kafka listener tests: exactly **one** Spring test context per service runs listeners. Test contexts are cached and never
 paused, so a second listening context would join the same consumer group and take partitions from the first. Every

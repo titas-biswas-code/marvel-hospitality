@@ -1,0 +1,81 @@
+# Continuous integration. Three independent jobs, run in parallel:
+#   contracts - the two copies of the credit-card spec are identical (make check-contracts)
+#   build     - `./gradlew build` of platform/ and of each service on its own (ADR-0001); Testcontainers uses the
+#               runner's Docker, so every unit, integration, Kafka, CDC and Keycloak test runs here as it does locally
+#   e2e       - the whole stack from infra/docker-compose.yml, then infra/e2e/smoke.sh (the README's 5-minute demo)
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contracts:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - run: make check-contracts
+
+  build:
+    name: build (${{ matrix.project }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        # platform/ is listed on its own: a service build compiles the starters it uses but does not run their tests.
+        project:
+          - platform
+          - room-reservation-service
+          - bank-transfer-payment-service
+          - credit-card-payment-service
+          - notification-service
+    defaults:
+      run:
+        working-directory: ${{ matrix.project }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 25
+      # `basic` = the MIT-licensed cache provider on top of actions/cache (the default provider is a commercial library).
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
+      - run: ./gradlew build --console=plain
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-reports-${{ matrix.project }}
+          path: ${{ matrix.project }}/build/reports/tests/
+          if-no-files-found: ignore
+
+  e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      # The stack's images (Kafka, Connect, Keycloak, otel-lgtm, Postgres, four service builds) need more disk than
+      # a fresh runner leaves free; drop preinstalled SDKs this job never uses.
+      - name: Free disk space
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL && df -h /
+      - name: Start the stack (infra + services, connectors registered)
+        run: make up-apps
+      - name: Smoke test
+        run: infra/e2e/smoke.sh
+      - name: Stack state and logs
+        if: failure()
+        run: |
+          docker compose -f infra/docker-compose.yml --env-file infra/.env --profile apps ps -a
+          docker compose -f infra/docker-compose.yml --env-file infra/.env --profile apps logs --no-color --tail=300

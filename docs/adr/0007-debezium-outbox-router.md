@@ -1,6 +1,6 @@
 # ADR-0007 Debezium Outbox Event Router as the outbox delivery mechanism
 
-Status: Accepted · Date: 2026-09-26
+Status: Accepted · Date: 2026-09-26 · Corrected: 2026-09-27 (PR-11 traceability check: text aligned with the code)
 
 ## Context
 ADR-0006 mandates a transactional outbox. Something must move outbox rows to Kafka reliably.
@@ -20,8 +20,9 @@ default. Both would break the event contracts (amounts at 2 fraction digits; `"p
 - Zero application code on the publish path and no polling latency; exactly the pattern the assessment asks to see.
 - Delivery is at-least-once (connector restarts replay from the last committed LSN); consumers dedupe (ADR-0006).
 - **Failure point — replication slot retention**: if a connector is down, Postgres retains WAL for its
-  slot indefinitely and the disk fills. Mitigations: slot lag metric and alert (ADR-0013), `max_slot_wal_keep_size`
-  set in compose, runbook entry for dropping/recreating a slot.
+  slot indefinitely and the disk fills. Mitigations: slot lag metric on a dashboard (ADR-0013), `max_slot_wal_keep_size`
+  set in compose, runbook entry for dropping/recreating a slot. An alert rule on the metric is **future**: nothing
+  pages anyone yet (README, Next steps).
 - **Failure point — connector down while services run**: events queue safely in the outbox/WAL; the
   system degrades to "eventually" with no data loss. README shows this by stopping Connect mid-demo.
 - **Failure point — schema drift**: the SMT depends on column names; Flyway must never rename outbox columns

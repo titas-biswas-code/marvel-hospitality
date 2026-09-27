@@ -1,6 +1,6 @@
 # ADR-0001 Monorepo of independently deployable services, cross-cutting code in platform starters
 
-Status: Accepted · Date: 2026-09-26 · Amended: 2026-09-26 (PR-01, see "Amendment")
+Status: Accepted · Date: 2026-09-26 · Amended: 2026-09-26 (PR-01, see "Amendment") · Corrected: 2026-09-27 (PR-11 traceability check: text aligned with the code)
 
 ## Context
 The brief asks for one Spring Boot service (`room-reservation-service`) and names two collaborators
@@ -35,8 +35,10 @@ notification consumer. Reviewers should be able to clone one repo and run everyt
   for platform code. Accepted locally; publishing versioned starters restores independence and is the
   production path.
 - Starters must stay small and backwards compatible; a breaking change is a new major version.
-- Contract drift between services is still possible; mitigated by contract docs, a JSON schema check in tests
-  (PR-04), and the end-to-end compose smoke test (PR-11).
+- Contract drift between services is still possible; mitigated by contract docs, tests that compare
+  each event payload with the contract's example (fixtures in each service's `src/test/resources/contracts/`), the
+  `make check-contracts` comparison of the two credit-card spec copies, and the end-to-end compose smoke test
+  (`infra/e2e/smoke.sh`).
 
 ## Amendment (PR-01)
 The original decision duplicated cross-cutting classes per service (marked `// platform-candidate`) and named

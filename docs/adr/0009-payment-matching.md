@@ -1,6 +1,6 @@
 # ADR-0009 Bank-transfer payment matching rules
 
-Status: Accepted · Date: 2026-09-26
+Status: Accepted · Date: 2026-09-26 · Corrected: 2026-09-27 (PR-11 traceability check: text aligned with the code)
 
 ## Context
 The bank event carries `transactionDescription = "<10-char E2E id> <8-char reservationId>"`, an amount,
@@ -23,7 +23,8 @@ and a debtor account. The brief says "total amount not received" implies partial
 3. Sum-based matching makes the result independent of message order.
 4. Amount comparison is exact `BigDecimal` at scale 2; no tolerance.
 5. Payments are never applied to a reservation of a *different* property than the one that owns the
-   reservationId (ids are global, so this cannot happen; asserted anyway).
+   reservationId. This holds by construction: ids are global, and a matched payment is stored with the property of
+   the reservation its id resolved to (the bank's event carries no property to disagree with).
 6. Unmatched payments are **not** auto-refunded: a typo could still be reconciled by a human; they sit in
    `received_payment` for a reconciliation UI (BONUS endpoint). This is a deliberate business judgement
    and the README says so.
