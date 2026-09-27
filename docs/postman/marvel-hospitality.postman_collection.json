@@ -1430,7 +1430,17 @@
                       "",
                       "pm.test(\"body is an array\", function () {",
                       "    pm.expect(pm.response.json()).to.be.an(\"array\");",
-                      "});"
+                      "});",
+                      "",
+                      "const payments = pm.response.json();",
+                      "const refunded = payments.find((p) => p.refund);",
+                      "if (refunded) {",
+                      "    pm.test(\"refund object has refundId and status\", function () {",
+                      "        pm.expect(refunded.refund.refundId).to.be.a(\"string\").and.not.empty;",
+                      "        pm.expect(refunded.refund.status).to.be.a(\"string\").and.not.empty;",
+                      "    });",
+                      "    pm.environment.set(\"refund_id\", refunded.refund.refundId);",
+                      "}"
                     ]
                   }
                 }
@@ -1899,6 +1909,56 @@
                       "",
                       "pm.test(\"amount keeps two fraction digits on the wire\", function () {",
                       "    pm.expect(pm.response.text()).to.include('\"amount\":120.00');",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Refunds",
+          "item": [
+            {
+              "name": "Get refund by refundId",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{payment_url}}/refunds/{{refund_id}}",
+                  "host": [
+                    "{{payment_url}}"
+                  ],
+                  "path": [
+                    "refunds",
+                    "{{refund_id}}"
+                  ]
+                },
+                "description": "Role bank:read. Every dev user (alice, bob, carol) and the bank-simulator service account hold it, so the token from any 'Get token' request works. Uses the refundId stored by 'List payments of a reservation' (field refund.refundId) once a bank-transfer overpayment or a payment after cancellation has requested one (ADR-0014)."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "const json = pm.response.json();",
+                      "",
+                      "pm.test(\"Returns the refund stored earlier\", function () {",
+                      "    pm.expect(json.refundId).to.eql(pm.environment.get(\"refund_id\"));",
+                      "    pm.expect(json.status).to.be.a(\"string\").and.not.empty;",
+                      "});",
+                      "",
+                      "pm.test(\"amount keeps two fraction digits on the wire\", function () {",
+                      "    const match = pm.response.text().match(/\"amount\":\\s*-?\\d+\\.(\\d+)/);",
+                      "    pm.expect(match, \"amount field present\").to.not.be.null;",
+                      "    pm.expect(match[1].length).to.eql(2);",
                       "});"
                     ]
                   }

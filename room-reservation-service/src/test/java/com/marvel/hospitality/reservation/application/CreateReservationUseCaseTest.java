@@ -110,7 +110,7 @@ class CreateReservationUseCaseTest {
         assertThat(attempts.getAllValues().get(0).reservationId())
                 .isNotEqualTo(attempts.getAllValues().get(1).reservationId());
         assertThat(view.reservation()).isSameAs(attempts.getAllValues().get(1));
-        verify(outbox, times(1)).append(any());
+        verify(outbox, times(1)).append(any(ReservationStatusChanged.class));
     }
 
     @Test
@@ -170,7 +170,7 @@ class CreateReservationUseCaseTest {
         assertThat(view.reservation().status()).isEqualTo(ReservationStatus.CONFIRMED);
         assertThat(view.reservation().paymentReference()).isEqualTo("OK-123");
         verify(reservations).add(view.reservation());
-        verify(outbox).append(any());
+        verify(outbox).append(any(ReservationStatusChanged.class));
     }
 
     @Test

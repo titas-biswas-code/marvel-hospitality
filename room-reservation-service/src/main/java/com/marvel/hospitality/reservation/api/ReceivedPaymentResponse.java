@@ -1,5 +1,6 @@
 package com.marvel.hospitality.reservation.api;
 
+import com.marvel.hospitality.reservation.application.PaymentWithRefund;
 import com.marvel.hospitality.reservation.domain.PaymentMatchOutcome;
 import com.marvel.hospitality.reservation.domain.ReceivedPayment;
 import java.math.BigDecimal;
@@ -12,7 +13,8 @@ import org.jspecify.annotations.Nullable;
  * {@code null} exactly for the outcomes where no reservation was found at all
  * ({@link PaymentMatchOutcome#UNMATCHED_FORMAT}, {@link PaymentMatchOutcome#UNMATCHED_UNKNOWN_RESERVATION}) —
  * see {@link ReceivedPayment}'s own invariant. {@code debtorAccountNumber} and {@code transactionDescription}
- * are included because reconciliation needs them.
+ * are included because reconciliation needs them. {@code refund} is the refund the payment triggered (an overpayment's
+ * surplus, or a payment that arrived when the reservation no longer awaited one), {@code null} otherwise.
  */
 public record ReceivedPaymentResponse(
         String paymentId,
@@ -23,9 +25,11 @@ public record ReceivedPaymentResponse(
         PaymentMatchOutcome outcome,
         String transactionDescription,
         String debtorAccountNumber,
-        Instant receivedAt) {
+        Instant receivedAt,
+        @Nullable PaymentRefundResponse refund) {
 
-    public static ReceivedPaymentResponse from(ReceivedPayment payment) {
+    public static ReceivedPaymentResponse from(PaymentWithRefund row) {
+        ReceivedPayment payment = row.payment();
         return new ReceivedPaymentResponse(
                 payment.paymentId(),
                 payment.reservationId() == null ? null : payment.reservationId().value(),
@@ -35,6 +39,7 @@ public record ReceivedPaymentResponse(
                 payment.outcome(),
                 payment.transactionDescription(),
                 payment.debtorAccountNumber(),
-                payment.receivedAt());
+                payment.receivedAt(),
+                row.refund() == null ? null : PaymentRefundResponse.from(row.refund()));
     }
 }

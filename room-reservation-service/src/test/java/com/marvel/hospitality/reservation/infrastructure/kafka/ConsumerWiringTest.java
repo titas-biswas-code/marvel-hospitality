@@ -8,10 +8,13 @@ import com.marvel.hospitality.platform.kafka.MarvelKafkaProperties;
 import com.marvel.hospitality.reservation.MockJwtDecoderConfiguration;
 import com.marvel.hospitality.reservation.TestcontainersConfiguration;
 import com.marvel.hospitality.reservation.application.PaymentInbox;
+import com.marvel.hospitality.reservation.application.RefundCompletionInbox;
 import java.util.Map;
 import java.util.UUID;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -68,11 +71,15 @@ class ConsumerWiringTest {
     private PaymentInbox paymentInbox;
 
     @Autowired
+    private RefundCompletionInbox refundCompletionInbox;
+
+    @Autowired
     private PlatformTransactionManager transactionManager;
 
-    @Test
-    void bankPaymentListenerUsesPlatformConsumptionPolicy() {
-        MessageListenerContainer container = registry.getListenerContainer(BankTransferPaymentUpdateListener.LISTENER_ID);
+    @ParameterizedTest
+    @ValueSource(strings = {BankTransferPaymentUpdateListener.LISTENER_ID, RefundCompletedListener.LISTENER_ID})
+    void listenerUsesPlatformConsumptionPolicy(String listenerId) {
+        MessageListenerContainer container = registry.getListenerContainer(listenerId);
 
         assertThat(container).isNotNull();
         assertThat(container.getContainerProperties().getAckMode()).isEqualTo(AckMode.MANUAL_IMMEDIATE);
@@ -115,5 +122,23 @@ class ConsumerWiringTest {
                 new Boolean[] {paymentInbox.firstDelivery(paymentId), paymentInbox.firstDelivery(paymentId)});
 
         assertThat(deliveries).containsExactly(true, false);
+    }
+
+    @Test
+    void refundCompletionInboxDeduplicatesOnRefundId() {
+        UUID refundId = UUID.randomUUID();
+        TransactionTemplate transactions = new TransactionTemplate(transactionManager);
+
+        Boolean[] deliveries = transactions.execute(status -> new Boolean[] {
+                refundCompletionInbox.firstDelivery(refundId), refundCompletionInbox.firstDelivery(refundId)});
+
+        assertThat(deliveries).containsExactly(true, false);
+    }
+
+    @Test
+    void oneListenerContainerPerConsumedTopic() {
+        // events.md, consumer groups: this service consumes the bank topic and refund-completed, nothing else.
+        assertThat(registry.getListenerContainerIds())
+                .containsExactlyInAnyOrder(BankTransferPaymentUpdateListener.LISTENER_ID, RefundCompletedListener.LISTENER_ID);
     }
 }

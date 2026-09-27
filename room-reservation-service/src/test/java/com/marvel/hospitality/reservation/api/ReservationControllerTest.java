@@ -12,11 +12,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.marvel.hospitality.reservation.MockJwtDecoderConfiguration;
 import com.marvel.hospitality.reservation.application.CreateReservationUseCase;
-import com.marvel.hospitality.reservation.application.GetReservationUseCase;
 import com.marvel.hospitality.reservation.application.CreditCardPaymentStatus;
+import com.marvel.hospitality.reservation.application.GetReservationUseCase;
 import com.marvel.hospitality.reservation.application.PaymentReferenceAlreadyUsedException;
 import com.marvel.hospitality.reservation.application.PaymentRejectedException;
 import com.marvel.hospitality.reservation.application.PaymentServiceUnavailableException;
+import com.marvel.hospitality.reservation.application.PaymentWithRefund;
 import com.marvel.hospitality.reservation.application.PropertyNotFoundException;
 import com.marvel.hospitality.reservation.application.ReceivedPaymentQueries;
 import com.marvel.hospitality.reservation.application.ReservationNotFoundException;
@@ -35,7 +36,9 @@ import com.marvel.hospitality.reservation.domain.PaymentMatchOutcome;
 import com.marvel.hospitality.reservation.domain.PaymentMode;
 import com.marvel.hospitality.reservation.domain.Property;
 import com.marvel.hospitality.reservation.domain.ReceivedPayment;
+import com.marvel.hospitality.reservation.domain.Refund;
 import com.marvel.hospitality.reservation.domain.RefundReason;
+import com.marvel.hospitality.reservation.domain.RefundStatus;
 import com.marvel.hospitality.reservation.domain.Reservation;
 import com.marvel.hospitality.reservation.domain.ReservationId;
 import com.marvel.hospitality.reservation.domain.ReservationStatus;
@@ -49,6 +52,7 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.List;
+import java.util.UUID;
 import org.hamcrest.Matcher;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -439,7 +443,8 @@ class ReservationControllerTest {
 
     @Test
     void listsPaymentsOfReservation() throws Exception {
-        given(receivedPaymentQueries.ofReservation("AMS01", "P4145478")).willReturn(List.of(matchedPayment()));
+        given(receivedPaymentQueries.ofReservation("AMS01", "P4145478"))
+                .willReturn(List.of(new PaymentWithRefund(matchedPayment(), null)));
 
         MvcResult result = mvc.perform(get("/properties/AMS01/reservations/P4145478/payments").with(readJwt()))
                 .andExpect(status().isOk())
@@ -455,6 +460,35 @@ class ReservationControllerTest {
 
         // Jackson 3 + spring.jackson.write.write-bigdecimal-as-plain=true (ADR-0016): never 1.2E+2.
         assertThat(result.getResponse().getContentAsString()).contains("\"amount\":120.00");
+        // A payment that made no refund due says so explicitly (rest-api.md).
+        assertThat(result.getResponse().getContentAsString()).contains("\"refund\":null");
+    }
+
+    @Test
+    void paymentsIncludeTheRefundTheyTriggeredWithItsStatus() throws Exception {
+        ReceivedPayment overpaid = new ReceivedPayment("7d1e2f30-4b5c-4d6e-8f90-a1b2c3d4e5f6",
+                ReservationId.of("P4145478"), "AMS01", "NL91ABNA0417164300", Money.eur("150.00"),
+                "1401541458 P4145478", "1401541458", PaymentMatchOutcome.OVERPAID, Instant.parse("2026-10-02T11:40:10Z"));
+        Refund refund = Refund.rehydrate(UUID.fromString("d3b07384-d9a0-4c9b-8e2f-6f1d2c3b4a59"),
+                overpaid.paymentId(), ReservationId.of("P4145478"), "AMS01", Money.eur("30.00"),
+                RefundReason.OVERPAYMENT, RefundStatus.FAILED, "CREDITOR_ACCOUNT_REJECTED",
+                Instant.parse("2026-10-02T11:40:10Z"), Instant.parse("2026-10-02T11:40:12Z"));
+        given(receivedPaymentQueries.ofReservation("AMS01", "P4145478"))
+                .willReturn(List.of(new PaymentWithRefund(overpaid, refund)));
+
+        MvcResult result = mvc.perform(get("/properties/AMS01/reservations/P4145478/payments").with(readJwt()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].outcome").value("OVERPAID"))
+                .andExpect(jsonPath("$[0].refund.refundId").value("d3b07384-d9a0-4c9b-8e2f-6f1d2c3b4a59"))
+                .andExpect(jsonPath("$[0].refund.currency").value("EUR"))
+                .andExpect(jsonPath("$[0].refund.reason").value("OVERPAYMENT"))
+                .andExpect(jsonPath("$[0].refund.status").value("FAILED"))
+                .andExpect(jsonPath("$[0].refund.failureReason").value("CREDITOR_ACCOUNT_REJECTED"))
+                .andExpect(jsonPath("$[0].refund.requestedAt").value("2026-10-02T11:40:10Z"))
+                .andExpect(jsonPath("$[0].refund.completedAt").value("2026-10-02T11:40:12Z"))
+                .andReturn();
+
+        assertThat(result.getResponse().getContentAsString()).contains("\"amount\":30.00");
     }
 
     @Test

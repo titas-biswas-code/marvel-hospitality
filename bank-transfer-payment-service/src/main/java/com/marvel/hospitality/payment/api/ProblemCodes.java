@@ -8,6 +8,7 @@ final class ProblemCodes {
 
     static final String UNSUPPORTED_CURRENCY = "UNSUPPORTED_CURRENCY";
     static final String BANK_TRANSACTION_NOT_FOUND = "BANK_TRANSACTION_NOT_FOUND";
+    static final String REFUND_NOT_FOUND = "REFUND_NOT_FOUND";
 
     private ProblemCodes() {
     }
