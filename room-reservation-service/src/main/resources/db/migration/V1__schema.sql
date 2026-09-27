@@ -4,7 +4,7 @@
 -- aligned with those contracts' constraints, column names and types; do not "improve" it here.
 
 -- Testcontainers databases never run the compose init script, and the compose init script deliberately
--- does not create this extension either (PR-00 note) -- it must be the first statement here.
+-- does not create this extension either, so it must be the first statement here.
 CREATE EXTENSION IF NOT EXISTS btree_gist;
 
 CREATE TABLE property (

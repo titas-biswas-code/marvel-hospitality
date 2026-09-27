@@ -18,7 +18,8 @@ CREATE TABLE bank_transaction (
   raw                   jsonb         NOT NULL
 );
 
--- Refund execution (PR-07 fills it; created here so V1 is the whole contract schema).
+-- Refund instructions (ADR-0014): one row per refund-requested accepted for a known payment, paid back to that
+-- payment's original debtor account. A request for an unknown payment has no row (the foreign key forbids it).
 CREATE TABLE refund_instruction (
   refund_id              uuid          PRIMARY KEY,
   payment_id             uuid          NOT NULL REFERENCES bank_transaction(payment_id),
