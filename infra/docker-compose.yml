@@ -194,6 +194,9 @@ services:
       - "4317:4317"   # OTLP gRPC
       - "4318:4318"   # OTLP HTTP
     volumes:
+      # Traces, logs, metrics and Grafana's own state (sessions, plugins) live under /data: keep them across
+      # restarts and `make down`; `make clean` / `reset` remove the volume like every other one.
+      - otel-lgtm-data:/data
       - ./grafana/provisioning/dashboards/marvel.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/marvel.yaml:ro
       - ./grafana/dashboards:/otel-lgtm/marvel-dashboards:ro
     healthcheck:
@@ -340,3 +343,4 @@ volumes:
   postgres-data:
   kafka-data:
   keycloak-data:
+  otel-lgtm-data:

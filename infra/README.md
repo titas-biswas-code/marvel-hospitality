@@ -28,7 +28,7 @@ make reset-apps                # the same, then rebuilds and starts the services
 | kafka-ui | http://localhost:8090 | web UI, also shows Kafka Connect connectors |
 | Kafka Connect REST | http://localhost:8083 | Debezium connectors `reservation-outbox`, `payment-outbox` (`/connectors?expand=status`) |
 | Keycloak | http://localhost:8180 | admin console at `/admin`, login `admin`/`admin`. Management/health port 9000 is **not** published to the host. |
-| Grafana (otel-lgtm) | http://localhost:3000 | Traces (Tempo), logs (Loki), metrics (Prometheus); dashboard "Marvel Hospitality". OTLP ingest on 4317 (gRPC) / 4318 (HTTP). |
+| Grafana (otel-lgtm) | http://localhost:3000 | Traces (Tempo), logs (Loki), metrics (Prometheus); dashboards in folder "Marvel Hospitality". Anonymous access; sign in as `admin`/`admin` to stop the "Unauthorized" toast. OTLP ingest on 4317 (gRPC) / 4318 (HTTP). |
 | room-reservation-service | 8080 | app service, added under compose profile `apps` from PR-01 |
 | bank-transfer-payment-service | 8081 | app service, added under compose profile `apps` from PR-01 |
 | credit-card-payment-service | 9090 | app service, added under compose profile `apps` in PR-03 |
@@ -80,7 +80,8 @@ make reset-apps                # the same, then rebuilds and starts the services
 - **otel-lgtm** (`grafana/otel-lgtm:0.34.0`): Grafana + Loki + Tempo + Prometheus bundle, OTLP receiver
   (ADR-0013). Every app service pushes traces, metrics and logs to `http://otel-lgtm:4318` (their `local`
   profile; override with `OTLP_ENDPOINT`). The image provisions its data sources itself;
-  `infra/grafana/` adds the "Marvel Hospitality" dashboard. No service depends on it being up.
+  `infra/grafana/` adds the "Marvel Hospitality" dashboards. No service depends on it being up. All telemetry and
+  Grafana's state live in the `otel-lgtm-data` volume: kept by `make down`, removed by `make clean` / `reset`.
 
 Every long-running container above has a Docker healthcheck; `kafka-init` and `connect-init` are the
 exceptions and are expected to exit successfully rather than stay healthy.

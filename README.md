@@ -157,6 +157,28 @@ therefore a single trace: the bank's `POST /bank-transactions` → the reservati
 notification, and for an overpayment the refund in the payment service and its completion back in the reservation
 service. (The booking itself is a separate trace: the request that created it.)
 
+**Finding your way in Grafana.**
+- *Explore* shows one data source at a time: pick it in the drop-down at the top left of the page (**Loki** for
+  logs, **Tempo** for traces, Prometheus for metrics). There is no sub-menu per data source.
+- For a search-bar-and-results view (Splunk-style), use *Explore* → **Loki** and switch the query editor from
+  *Builder* to *Code*. *Drilldown* → *Logs* is Grafana's point-and-click alternative, grouped by service.
+- Grafana lets anyone in without a login, but then shows an "Unauthorized" toast on every page: the page asks for
+  the user's starred dashboards and teams, which an anonymous visitor does not have. Harmless; *Sign in* as
+  `admin` / `admin` makes it go away.
+- Telemetry is kept in the `otel-lgtm-data` volume: it survives restarts and `make down`, and `make clean` removes it.
+
+| To find | LogQL (Explore → Loki, *Code*) |
+|---|---|
+| Everything | `{service_name=~".+"}` |
+| One service | `{service_name="room-reservation-service"}` |
+| Free text | `{service_name=~".+"} \|= "Refund"` |
+| One reservation / payment / refund | `{service_name=~".+"} \| reservationId="P6FDGTP4"` (or `paymentId=`, `refundId=`) |
+| Errors only | `{service_name=~".+"} \| severity_text="ERROR"` |
+| One trace's log lines | `{service_name=~".+"} \| trace_id="<trace id>"` |
+
+Click a log line to see its fields; the **Trace** button next to `trace_id` opens the trace in Tempo. The
+*Marvel – Saga explorer* dashboard does the reservation search without writing a query.
+
 **Find the saga of one reservation** after running the flow in *Run it* (`$ID` from there):
 
 1. Grafana → *Explore* → **Loki**, code mode:
