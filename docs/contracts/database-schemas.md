@@ -95,6 +95,9 @@ CREATE TABLE refund (
   requested_at   timestamptz   NOT NULL,
   completed_at   timestamptz
 );
+-- V3: a payment triggers at most one refund (ADR-0009); the database refuses a second one. Also indexes the payments
+-- views' refund lookup. Not an API error (no request can cause it).
+ALTER TABLE refund ADD CONSTRAINT refund_payment_id_key UNIQUE (payment_id);
 
 -- outbox_event, processed_message: see outbox-and-inbox.md
 ```

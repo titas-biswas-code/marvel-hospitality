@@ -35,8 +35,10 @@ public class ProcessedMessageInbox {
      * @param messageId the per-topic business id (docs/contracts/outbox-and-inbox.md lists which field is used, per
      *        topic — e.g. {@code paymentId} for the bank topic, header {@code id} for {@code
      *        reservation-status-changed})
-     * @param consumer the consumer group / listener name; together with {@code messageId} this is the table's
-     *        primary key, so the same message is tracked independently by each consumer that reads it
+     * @param consumer a fixed name of the consuming listener; together with {@code messageId} this is the table's
+     *        primary key, so the same message is tracked independently by each consumer that reads it. Never the
+     *        Kafka consumer group: a group may be renamed or split, and a new name here would make every message
+     *        already applied look new (ADR-0008). Never change it once rows exist.
      * @param topic the Kafka topic the message arrived on
      * @return {@code true} on first delivery — apply the business effect; {@code false} on a duplicate — skip it
      * @throws IllegalStateException if there is no active transaction — marking the message processed on its own

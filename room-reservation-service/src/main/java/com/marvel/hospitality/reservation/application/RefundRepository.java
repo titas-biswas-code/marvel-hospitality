@@ -16,6 +16,6 @@ public interface RefundRepository {
     /** Writes the refund's outcome ({@code status}, {@code failure_reason}, {@code completed_at}). */
     void update(Refund refund);
 
-    /** The refunds of the given payments, in no particular order; at most one per payment. */
+    /** The refunds of the given payments, in no particular order; at most one per payment (unique in the schema). */
     List<Refund> findByPaymentIds(Collection<String> paymentIds);
 }

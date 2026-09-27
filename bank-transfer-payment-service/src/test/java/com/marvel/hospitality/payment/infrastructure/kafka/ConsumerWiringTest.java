@@ -16,6 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.listener.ConcurrentMessageListenerContainer;
@@ -70,6 +71,9 @@ class ConsumerWiringTest {
     @Autowired
     private PlatformTransactionManager transactionManager;
 
+    @Autowired
+    private JdbcClient jdbc;
+
     @Test
     void refundRequestedListenerUsesPlatformConsumptionPolicy() {
         MessageListenerContainer container = registry.getListenerContainer(RefundRequestedListener.LISTENER_ID);
@@ -115,5 +119,8 @@ class ConsumerWiringTest {
                 new Boolean[] {refundInbox.firstDelivery(refundId), refundInbox.firstDelivery(refundId)});
 
         assertThat(deliveries).containsExactly(true, false);
+        // A literal on purpose: the stored consumer name must never change, and must not be the consumer group.
+        assertThat(jdbc.sql("SELECT consumer FROM processed_message WHERE message_id = :id").param("id", refundId)
+                .query(String.class).single()).isEqualTo("refund-requested");
     }
 }

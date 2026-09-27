@@ -1,6 +1,6 @@
 # ADR-0008 Kafka consumption: acknowledgement, retries, dead-letter topics, poison messages
 
-Status: Accepted · Date: 2026-09-26 · Amended: 2026-09-27 (consumer groups, see "Future")
+Status: Accepted · Date: 2026-09-26 · Amended: 2026-09-27 (consumer groups and the inbox consumer name; see "Future")
 
 ## Context
 Consumers must never lose a payment, never double-apply one, never wedge a partition on a bad message,
@@ -24,7 +24,9 @@ and must surface unprocessable messages for humans.
   number, original headers plus spring-kafka's `kafka_dlt-*` exception headers. No automatic DLT re-consumption;
   `scripts/replay-dlt.sh` and a metric (`kafka.dlt.messages{topic}`) exist instead.
 - The policy lives once in `platform/kafka-starter` (ADR-0001); services only declare `@KafkaListener`s.
-- Idempotency per ADR-0006 via `processed_message`; the dedupe key per topic is in contracts/events.md.
+- Idempotency per ADR-0006 via `processed_message`; the dedupe key per topic is in contracts/events.md. The inbox's
+  `consumer` is a fixed name per listener (conventionally the topic), never the consumer group, and never changes once
+  rows exist (contracts/outbox-and-inbox.md).
 - Consumer concurrency = partitions (3); one listener container per topic; consumer group = service name.
 - Topics are created by infra, not by the apps.
 
@@ -35,18 +37,19 @@ and must surface unprocessable messages for humans.
 - One group per service means a service's listeners rebalance together: with the classic group protocol a member
   joining or leaving for one topic briefly pauses the service's consumers of its other topics. At these volumes the
   pause is negligible.
-- The inbox's `consumer` column is the group id. Renaming a group is therefore not a free operation: the new group
-  starts at `auto-offset-reset: earliest`, and because the inbox key `(message_id, consumer)` changed with it, already
-  applied messages would be applied again. A rename needs the inbox consumer name decoupled from the group first.
+- A consumer group can be renamed or split safely: the new group starts at `auto-offset-reset: earliest` and
+  re-reads what the topic still retains, but the inbox key `(message_id, consumer)` does not involve the group, so
+  every message already applied is recognised and skipped. (Until 2026-09-27 the inbox consumer name *was* the group
+  id, which would have made such a rename apply old messages again.)
 
 ## Alternatives considered
 - Non-blocking retries (`@RetryableTopic`): great for high throughput, breaks per-key ordering; rejected.
 - Auto-commit: risks losing a message on crash between poll and commit; rejected.
 - Skipping bad records silently: violates "never lose a payment"; rejected.
 - One consumer group per listener instead of per service: independent rebalances and per-topic lag, but groups do
-  not affect correctness (that comes from the inbox and ack-after-commit), the group then no longer names the
-  consuming application in tooling, and the switch hits the inbox coupling above; rejected. The incremental protocol
-  below gives the rebalance isolation without it.
+  not affect correctness (that comes from the inbox and ack-after-commit), and the group then no longer names the
+  consuming application in tooling; rejected. The switch would be safe (see Consequences), and the incremental
+  protocol below gives the rebalance isolation without it.
 
 ## Future
 - **KIP-848 consumer group protocol** (`group.protocol=consumer`, GA since Kafka 4.0, supported by spring-kafka 4):

@@ -67,12 +67,14 @@ Posts one bank transaction to `POST /bank-transactions`.
 
 ```
 ./scripts/pay-in-full.sh --property AMS01 --reservation P4145478
+./scripts/pay-in-full.sh --property AMS01 --reservation P4145478 --extra 10   # overpay by 10.00
 ```
 
 Reads the reservation (`GET /properties/{propertyId}/reservations/{reservationId}`, as dev user `alice`
 by default, via `user-token.sh`), computes `outstanding = totalAmount - amountReceived` using integer-cents
 arithmetic (never floating point), refuses if the reservation is not `PENDING_PAYMENT` or outstanding is
-`<= 0`, then calls `post-bank-transaction.sh --reservation ... --amount <outstanding>`. Any extra flag
+`<= 0`, then calls `post-bank-transaction.sh --reservation ... --amount <outstanding>`. `--extra <amount>` (at most
+2 decimals, > 0) pays that much more, which the reservation service refunds (see "Overpayment and refund"). Any other flag
 (e.g. `--ref`) is passed through to `post-bank-transaction.sh`. `RESERVATION_URL` env var overrides the
 default `http://localhost:8080`.
 
@@ -90,8 +92,20 @@ by hand.
    with key = the payment's `paymentId` and headers `id`, `eventType`, `eventVersion`, `producer`,
    `occurredAt`, `traceparent` (`propertyId` header is null on this topic — it isn't property-scoped
    money yet). The value is `{"paymentId", "debtorAccountnumber", "amountReceived", "transactionDescription"}`.
-4. Until the reservation service consumes this topic (PR-05), the reservation stays `PENDING_PAYMENT` —
-   the message on Kafka is the payment side of the saga done; the reservation side is next.
+4. The reservation service consumes it and the reservation becomes `CONFIRMED`
+   (`GET /properties/AMS01/reservations/P4145478`; its payments list shows `MATCHED_FULL`).
+
+## Overpayment and refund
+
+1. Create a `BANK_TRANSFER` reservation as above, e.g. `P4145478`.
+2. `./scripts/pay-in-full.sh --property AMS01 --reservation P4145478 --extra 10`
+3. The reservation is `CONFIRMED`, and `GET /properties/AMS01/reservations/P4145478/payments` shows the payment as
+   `OVERPAID` with `refund.amount = 10.00`. Within a second `refund.status` moves from `REQUESTED` to `COMPLETED`:
+   the reservation service asked on `refund-requested`, the payment service paid it back to the original debtor
+   account and answered on `refund-completed`.
+4. `GET /refunds/<refund.refundId>` on the payment service (`bank:read`) shows the instruction `EXECUTED`.
+5. Add `--debtor FAIL00000000000001` to step 2 and the stub bank rejects the payout: the refund ends `FAILED` /
+   `CREDITOR_ACCOUNT_REJECTED`, and the reservation service logs it at ERROR and counts it (`refund.failed`).
 
 ## Duplicate transaction (idempotency)
 
@@ -120,8 +134,9 @@ Two payments of 120 each on a 240 reservation: two `202`s, two distinct `payment
 ```
 
 Still `202 Accepted` from `bank-transfer-payment-service` — ingestion and publishing don't parse the
-remittance information, matching to a reservation is the consumer's job (PR-05). Once that consumer
-exists, this is the case that produces an unmatched payment for reconciliation.
+remittance information; matching to a reservation is the reservation service's job (ADR-0009). There it becomes an
+`UNMATCHED_FORMAT` payment, kept for reconciliation (`GET /unmatched-payments`, role `bank:read`) and not refunded
+automatically: a person may still match a typo.
 
 ## Non-EUR currency
 

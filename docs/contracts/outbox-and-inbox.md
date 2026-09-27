@@ -70,7 +70,7 @@ headers to every message; the headers above are the whole contract).
 ```sql
 CREATE TABLE processed_message (
   message_id   varchar(64)  NOT NULL,
-  consumer     varchar(64)  NOT NULL,    -- consumer group / listener name
+  consumer     varchar(64)  NOT NULL,    -- fixed name of the consuming listener, never the consumer group
   topic        varchar(128) NOT NULL,
   processed_at timestamptz  NOT NULL DEFAULT now(),
   PRIMARY KEY (message_id, consumer)
@@ -84,3 +84,6 @@ apply business effect (may write outbox rows)
 ```
 `message_id` per topic: bank topic → `paymentId`; `refund-requested`/`refund-completed` → `refundId`;
 `reservation-status-changed` → header `id`.
+`consumer` is a fixed name per listener, conventionally the topic it consumes (`bank-transfer-payment-update`,
+`refund-completed`, `refund-requested`), and is never changed once rows exist. It is deliberately not the Kafka consumer
+group, so a group can be renamed or split without already applied messages looking new (ADR-0008).

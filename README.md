@@ -33,11 +33,14 @@ The first run takes a few minutes (image builds). Then:
 - Postman: import `docs/postman/` (collection + environment) and run the folder **"Demo: bank transfer paid in two
   parts"**: book, pay half (still `PENDING_PAYMENT`), pay the rest (`CONFIRMED`). See `docs/postman/README.md`.
 - Swagger UI per service, e.g. http://localhost:8080/swagger-ui.html, or all of them at http://localhost:8088.
-- Pay as "the bank" from the shell: `bank-transfer-simulator/` (see its README).
+- Pay as "the bank" from the shell: `bank-transfer-simulator/` (see its README). To see a refund, overpay:
+  `bank-transfer-simulator/scripts/pay-in-full.sh --property AMS01 --reservation <id> --extra 10`, then the
+  reservation's payments show the surplus refund going `REQUESTED` → `COMPLETED`.
 
 ```
 make down        # stop everything, keep the data
 make clean       # remove containers, volumes (all data) and the built images; the next `make up-apps` starts from scratch
+make reset-apps  # wipe all data and start everything again, rebuilt (e.g. after pulling an edited migration)
 ```
 
 ## Auto-cancel

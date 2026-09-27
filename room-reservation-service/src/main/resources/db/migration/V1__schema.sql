@@ -109,7 +109,7 @@ CREATE INDEX outbox_event_created_at_idx ON outbox_event (created_at);
 
 CREATE TABLE processed_message (
   message_id   varchar(64)  NOT NULL,
-  consumer     varchar(64)  NOT NULL,    -- consumer group / listener name
+  consumer     varchar(64)  NOT NULL,    -- fixed name of the consuming listener, never the consumer group
   topic        varchar(128) NOT NULL,
   processed_at timestamptz  NOT NULL DEFAULT now(),
   PRIMARY KEY (message_id, consumer)

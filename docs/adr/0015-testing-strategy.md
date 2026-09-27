@@ -1,6 +1,6 @@
 # ADR-0015 Testing strategy
 
-Status: Accepted · Date: 2026-09-26
+Status: Accepted · Date: 2026-09-26 · Amended: 2026-09-27 (Kafka listener tests)
 
 ## Decision
 | Layer | Tool | What is proven |
@@ -18,4 +18,11 @@ Status: Accepted · Date: 2026-09-26
 
 Rules: no H2; no `Thread.sleep` (use Awaitility); `Clock` is a test double; test data builders per
 aggregate; each service's `./gradlew build` runs everything without external infra.
+
+Kafka listener tests: exactly **one** Spring test context per service runs listeners. Test contexts are cached and never
+paused, so a second listening context would join the same consumer group and take partitions from the first. Every
+listener test extends the service's abstract `KafkaListenersIntegrationTest`, which fixes the annotations and the
+spies once. Before counting attempts or deliveries, tests wait with `ListenerAssignments.awaitFullyAssigned`
+(`platform/kafka-starter` test fixtures) until every listener owns all partitions of its topic, so no rebalance can
+interrupt a retry sequence. All other contexts run with listeners off and no broker.
 Coverage is not a target; the named scenarios in each PR file are.

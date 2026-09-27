@@ -55,6 +55,8 @@ dependencies {
     testImplementation 'org.awaitility:awaitility'
     // Shared Postgres/Kafka/Connect containers and the Debezium CDC harness (platform/outbox-starter test fixtures).
     testImplementation testFixtures("com.marvel.hospitality:marvel-outbox-spring-boot-starter:${marvelPlatformVersion}")
+    // ListenerAssignments: wait until every listener owns its partitions (platform/kafka-starter test fixtures).
+    testImplementation testFixtures("com.marvel.hospitality:marvel-kafka-spring-boot-starter:${marvelPlatformVersion}")
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 

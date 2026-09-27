@@ -1,15 +1,13 @@
 package com.marvel.hospitality.payment;
 
-import static org.awaitility.Awaitility.await;
-
 import com.marvel.hospitality.payment.application.ExecuteRefundUseCase;
+import com.marvel.hospitality.platform.kafka.test.ListenerAssignments;
 import java.time.Duration;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
-import org.springframework.kafka.listener.MessageListenerContainer;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
@@ -35,15 +33,9 @@ public abstract class KafkaListenersIntegrationTest {
     @Autowired
     private KafkaListenerEndpointRegistry listenerRegistry;
 
-    /**
-     * The three consumer threads join the group one after another, and each join rebalances; a retry sequence
-     * interrupted by a rebalance restarts its attempt count. Wait until every listener has all three partitions.
-     */
+    /** Attempt and delivery counts are only exact once no rebalance can interrupt them. */
     @BeforeEach
     void allPartitionsAreAssigned() {
-        for (MessageListenerContainer container : listenerRegistry.getListenerContainers()) {
-            await().atMost(TIMEOUT).until(() -> container.getAssignedPartitions() != null
-                    && container.getAssignedPartitions().size() == 3);
-        }
+        ListenerAssignments.awaitFullyAssigned(listenerRegistry, 3, TIMEOUT);
     }
 }

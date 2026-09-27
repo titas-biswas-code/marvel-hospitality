@@ -1,3 +1,7 @@
+plugins {
+    id 'java-test-fixtures'
+}
+
 description = 'Kafka consumption policy (ADR-0008): manual ack, ErrorHandlingDeserializer, blocking exponential ' +
         'retries, dead-letter topic <topic>.DLT, JSON-to-record conversion, kafka.dlt.messages metric'
 
@@ -10,6 +14,9 @@ dependencies {
     api 'io.micrometer:micrometer-core'
 
     annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
+
+    // ListenerAssignments: shared by every service's listener integration tests.
+    testFixturesImplementation 'org.awaitility:awaitility'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.boot:spring-boot-testcontainers'

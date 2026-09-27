@@ -1,7 +1,9 @@
 package com.marvel.hospitality.reservation.infrastructure.persistence;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
+import com.marvel.hospitality.platform.problem.ConstraintNames;
 import com.marvel.hospitality.reservation.TestcontainersConfiguration;
 import com.marvel.hospitality.reservation.application.ReceivedPaymentRepository;
 import com.marvel.hospitality.reservation.application.RefundRepository;
@@ -123,6 +125,21 @@ class RefundPersistenceTest {
 
         assertThat(found).extracting(Refund::refundId).containsExactlyInAnyOrder(first.refundId(), second.refundId());
         assertThat(refunds.findByPaymentIds(List.of())).isEmpty();
+    }
+
+    /** V3: a second refund for one payment is refused by the database itself, by this constraint name. */
+    @Test
+    void aPaymentCannotHaveTwoRefunds() {
+        Refund first = requestedRefund(Money.eur("10.00"), RefundReason.OVERPAYMENT);
+        refunds.add(first);
+        Refund second = Refund.rehydrate(UUID.randomUUID(), first.paymentId(), first.reservationId(),
+                first.propertyId(), Money.eur("5.00"), RefundReason.OVERPAYMENT, RefundStatus.REQUESTED, null,
+                REQUESTED_AT, null);
+
+        Throwable failure = catchThrowable(() -> refunds.add(second));
+
+        assertThat(failure).isNotNull();
+        assertThat(ConstraintNames.of(failure)).contains("refund_payment_id_key");
     }
 
     @Test
