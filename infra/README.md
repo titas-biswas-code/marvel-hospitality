@@ -14,7 +14,10 @@ make client-token CLIENT=bank-simulator   # client-credentials token for a servi
 make down                      # stops everything (infra and `apps`), keeps volumes
 make reset                     # wipes ALL volumes (postgres, kafka, keycloak) and brings infra back up
 make reset-apps                # the same, then rebuilds and starts the services and registers the connectors
+make shell                     # bash with curl/jq/make in the `tools` container (localhost reaches the services)
 ```
+
+On Windows every target has a `.\marvel <target>` equivalent (`marvel.cmd`, `.\marvel help`); see the root README.
 
 `infra/.env` is a local file, created once from `infra/.env.example` by the `up` target (or by hand:
 `cp infra/.env.example infra/.env`). It is never committed; edit it locally to change any default.
@@ -82,6 +85,11 @@ make reset-apps                # the same, then rebuilds and starts the services
   profile; override with `OTLP_ENDPOINT`). The image provisions its data sources itself;
   `infra/grafana/` adds the "Marvel Hospitality" dashboards. No service depends on it being up. All telemetry and
   Grafana's state live in the `otel-lgtm-data` volume: kept by `make down`, removed by `make clean` / `reset`.
+
+- **tools** (profile `tools`, built from `infra/tools/`): not a service but a toolbox: bash, curl, jq, make, python3 and
+  the Docker CLI, with the repository mounted at `/work`. `localhost:<port>` inside it is forwarded to the services
+  (`entrypoint.sh`), so the scripts and the README's commands run unchanged; the Docker socket lets them use
+  `docker compose exec`. `.\marvel` on Windows runs every script here; `make shell` opens it on macOS/Linux.
 
 Every long-running container above has a Docker healthcheck; `kafka-init` and `connect-init` are the
 exceptions and are expected to exit successfully rather than stay healthy.

@@ -144,14 +144,27 @@ error, with timeouts, retries and a circuit breaker, and never holds a database 
 
 ## Run it
 
-Needs **Docker** (with Compose v2), **make**, **curl** and **jq**. No JDK: the services are compiled inside Docker.
-Free host ports 3000, 5432, 8080–8083, 8088, 8090, 8180, 9090, 9094, 4317–4318.
+The only requirement is **Docker**: Docker Desktop on Windows or macOS, Docker Engine with Compose v2 on Linux.
+The services are compiled inside Docker, so no JDK is needed. The first start takes a few minutes (image builds).
 
+**macOS / Linux** (also needs `make`, `curl` and `jq`):
 ```
 git clone https://github.com/titas-biswas-code/marvel-hospitality.git && cd marvel-hospitality
-make up-apps     # creates infra/.env from .env.example, builds the four services, starts everything and
-                 # registers the Debezium connectors (the first run takes a few minutes)
+make up-apps          # creates infra/.env, builds and starts everything, registers the CDC connectors
+make smoke            # optional: the end-to-end check, about a minute
 ```
+
+**Windows** (PowerShell or Command Prompt; Git, or the ZIP from GitHub; nothing else to install):
+```
+git clone https://github.com/titas-biswas-code/marvel-hospitality.git
+cd marvel-hospitality
+.\marvel init         # checks Docker, ports and memory; creates infra/.env; offers optional tools (Java, Postman)
+.\marvel up-apps      # builds and starts everything, registers the CDC connectors
+.\marvel smoke        # optional: the end-to-end check, about a minute
+```
+`.\marvel help` lists every command; each mirrors a `make` target. Scripts that need bash, curl or jq run in a small
+`tools` container, so they behave the same everywhere. Docker Desktop needs virtualization: inside a virtual machine,
+enable nested virtualization (Proxmox: CPU type `host`) and give the VM about 16 GB of memory.
 
 | What | Where |
 |---|---|
@@ -164,22 +177,22 @@ make up-apps     # creates infra/.env from .env.example, builds the four service
 | Postgres (`psql` via `docker compose exec postgres`) · Kafka for host tools | 5432 · 9094 |
 
 Users (password `password`): `alice` (`AMS01`, `LIS01`), `bob` (`AMS01`), `carol` (`LIS01`, read-only).
-`make token` prints a token for alice, `make token USER=bob` for bob. Details in
-[infra/keycloak/README.md](infra/keycloak/README.md); ports, containers and resets in [infra/README.md](infra/README.md).
+`make token` (Windows: `.\marvel token`) prints a token for alice; add `USER=bob` (`.\marvel token bob`) for another
+user. Details in [infra/keycloak/README.md](infra/keycloak/README.md); ports, containers and resets in
+[infra/README.md](infra/README.md).
 
-```
-make down        # stop everything, keep the data
-make clean       # remove containers, volumes (all data) and the built images; the next `make up-apps` starts from scratch
-make reset-apps  # wipe all data and start everything again, rebuilt
-make build-all   # ./gradlew build in platform/ and every service: needs a JDK 17+ to run Gradle (it fetches JDK 25
-                 # itself if missing) and Docker for Testcontainers; no running stack
-```
+| macOS / Linux | Windows | |
+|---|---|---|
+| `make down` | `.\marvel down` | stop everything, keep the data |
+| `make clean` | `.\marvel clean` | remove containers, all data and the built images |
+| `make reset-apps` | `.\marvel reset-apps` | wipe all data and start everything again, rebuilt |
+| `make build-all` | `.\marvel build-all` | build and test `platform/` and every service (needs a JDK 17+ and Docker; no running stack) |
 
 ## 5-minute demo
 
-The whole saga from the shell, as receptionist alice at property `AMS01`. Paste the blocks in order (bash or zsh).
-The same steps, with assertions and random dates so it can run any number of times, are
-[`infra/e2e/smoke.sh`](infra/e2e/smoke.sh): `infra/e2e/smoke.sh` after `make up-apps`.
+The whole saga from the shell, as receptionist alice at property `AMS01`. Paste the blocks in order into bash or
+zsh; on Windows, run `.\marvel shell` first and paste them there. The same steps, with assertions and random dates so
+they can run any number of times, are [`infra/e2e/smoke.sh`](infra/e2e/smoke.sh) (`make smoke` / `.\marvel smoke`).
 
 **1. Log in and book a cash stay: confirmed at once.**
 ```
@@ -279,7 +292,8 @@ environment); details in [postman/README.md](postman/README.md).
 
 Credit-card payment references drive the stub: `OK…` confirmed, `REJ…` rejected, `ERR…` 500, `SLOW…` a 5 s answer
 (timeout), anything else 404. The simulator scripts are in `bank-transfer-simulator/scripts/`
-([README](bank-transfer-simulator/README.md)).
+([README](bank-transfer-simulator/README.md)); on Windows run them as `.\marvel sim <script> <arguments>`, e.g.
+`.\marvel sim pay-in-full.sh --property AMS01 --reservation <id>`.
 
 ## Assumptions and judgement calls
 
@@ -378,7 +392,8 @@ What would come next in a real system, in rough order of value:
    make replay-dlt TOPIC=bank-transfer-payment-update DRY_RUN=1   # shows what would be replayed
    make replay-dlt TOPIC=bank-transfer-payment-update             # replays; progress is kept, so re-running is safe
    ```
-   (Needs `python3`. Details at the top of [`scripts/replay-dlt.sh`](scripts/replay-dlt.sh).)
+   Windows: `.\marvel replay-dlt bank-transfer-payment-update --dry-run`, then without `--dry-run`. (`make` needs
+   `python3`; details at the top of [`scripts/replay-dlt.sh`](scripts/replay-dlt.sh).)
 
 **Events stopped flowing / Kafka Connect is down.** Nothing is lost: rows wait in the outbox tables and in the WAL
 that each connector's replication slot holds back ([demo](docs/cdc-durability-demo.md)).
@@ -425,7 +440,7 @@ Metrics: `reservation.autocancel.cancelled` (counter, tagged `propertyId`) and `
 The demo (step 7) edits the stored deadline instead of changing a setting. The deadline is always a local midnight, so
 no "days before start" value could bring the first cancellation closer than the next midnight. Editing the row does
 what the passing of time would do. To poll every 5 s instead of 60 s, set `RESERVATION_AUTO_CANCEL_INTERVAL=PT5S` in
-`infra/.env` and run `make up-apps` again.
+`infra/.env` and run `make up-apps` (`.\marvel up-apps`) again.
 
 ## Notifications
 
@@ -522,7 +537,8 @@ healthchecks use it); liveness does not depend on either.
 | [`notification-service/`](notification-service/) | Renders and logs a notification per status change. DB `notification` |
 | [`platform/`](platform/) | Spring Boot starters for the shared mechanism: security, problem details, outbox, inbox, Kafka, observability |
 | [`bank-transfer-simulator/`](bank-transfer-simulator/) | "The bank": scripts that post bank transactions |
-| [`infra/`](infra/) | `docker-compose.yml`, Keycloak realm, Debezium connectors, topics, Grafana, `e2e/smoke.sh` |
+| [`infra/`](infra/) | `docker-compose.yml`, Keycloak realm, Debezium connectors, topics, Grafana, `e2e/smoke.sh`, the `tools` container |
+| `marvel.cmd`, [`scripts/`](scripts/) | Windows entry point (`scripts/windows/marvel.ps1`); `replay-dlt.sh` |
 | [`postman/`](postman/) | Postman collection and environment: a runnable demo folder per feature |
 | [`docs/`](docs/) | ADRs, contracts, resolved versions |
 

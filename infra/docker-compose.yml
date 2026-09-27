@@ -339,6 +339,21 @@ services:
       retries: 15
       start_period: 15s
 
+  # Command-line tools for the repository's scripts (bash, curl, jq, make, python3, Docker CLI): nothing to install on
+  # the host. Profile `tools`, started on demand, e.g.
+  #   docker compose -f infra/docker-compose.yml --env-file infra/.env --profile tools run --rm tools infra/e2e/smoke.sh
+  # `.\marvel` on Windows uses it for every script. localhost:<port> inside it reaches the services (entrypoint.sh);
+  # the Docker socket lets scripts run `docker compose exec` against the stack.
+  tools:
+    build:
+      context: ./tools
+    image: marvel-hospitality/tools:local
+    profiles: [tools]
+    working_dir: /work
+    volumes:
+      - ..:/work
+      - /var/run/docker.sock:/var/run/docker.sock
+
 volumes:
   postgres-data:
   kafka-data:

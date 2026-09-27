@@ -117,7 +117,7 @@ refund_settled()     { get_payments;     [[ "$(jq -r 'last.refund.status // "" |
 pay() {
   local script="$1" out
   shift
-  out="$("$SIMULATOR/$script" "$@" 2>&1)" || fail "bank simulator: $script $*" "$out"
+  out="$(bash "$SIMULATOR/$script" "$@" 2>&1)" || fail "bank simulator: $script $*" "$out"
   ok "bank transaction posted: $(sed -n 's/.*"paymentId": "\([^"]*\)".*/paymentId \1/p' <<<"$out" | head -1)"
 }
 
@@ -134,7 +134,7 @@ expect '[.["reservation-outbox", "payment-outbox"] | .status.connector.state, .s
   "Debezium connectors reservation-outbox and payment-outbox are RUNNING"
 
 step "Access token for $DEMO_USER (password grant, Keycloak)"
-TOKEN="$("$SIMULATOR/user-token.sh" "$DEMO_USER")" || fail "no token for $DEMO_USER from Keycloak"
+TOKEN="$(bash "$SIMULATOR/user-token.sh" "$DEMO_USER")" || fail "no token for $DEMO_USER from Keycloak"
 ok "token issued; properties claim: $(jq -Rr 'split(".")[1] | gsub("-"; "+") | gsub("_"; "/") | @base64d | fromjson | .properties | join(", ")' <<<"$TOKEN" 2>/dev/null || echo '?')"
 
 step "CASH reservation is confirmed at once"
