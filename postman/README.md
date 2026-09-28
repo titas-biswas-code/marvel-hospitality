@@ -10,11 +10,13 @@ then select the "marvel-hospitality (local)" environment (top right).
 
 ## Run order
 
-1. Run a request from the **Auth** folder ("Get token (alice)", "(bob)", "(carol)", or
-   "(bank-simulator, client credentials)"). Its test script parses the response and stores the token in
-   the environment variable `access_token`.
-2. Run any other request — the collection-level auth is `Bearer {{access_token}}`, so it picks up the
-   token automatically. The Auth folder's own requests are `noauth` (they are what obtains the token).
+The whole collection runs top to bottom (Postman: *Run collection*, or newman below), and so does every folder on its
+own: each fetches the tokens it needs first, stores them in the environment variable `access_token`, and the
+collection-level auth `Bearer {{access_token}}` picks them up. For single requests, run a request from the **Auth**
+folder first ("Get token (alice)", "(bob)", "(carol)" or "(bank-simulator, client credentials)").
+
+A few requests in the service folders use an id another request stores ("Get refund by refundId", the notification
+requests): run on their own they are skipped with a console note, not failed.
 
 `whoami` in each service folder needs any valid token; `whoami without token → 401` in each service folder
 deliberately overrides auth to `noauth` to prove the service is protected.
@@ -125,38 +127,19 @@ sequence is already covered by the two-part demo's step 12, so it is not repeate
 
 Auto-cancel has no Postman demo: seeing it fire needs the stored payment deadline moved backwards in the
 database, which is out of scope for an HTTP-only collection. See the root README's
-[Auto-cancel → See it happen](../../README.md#see-it-happen) section instead.
+[5-minute demo](../README.md#5-minute-demo) (step 7) instead.
 
 ## Newman (CLI)
 
-```
-npx --yes newman run postman/marvel-hospitality.postman_collection.json \
-  -e postman/local.postman_environment.json --folder Auth
+After `make up-apps` (Windows: `.\marvel up-apps`), everything at once:
 
+```
+npx --yes newman run postman/marvel-hospitality.postman_collection.json -e postman/local.postman_environment.json
+```
+
+or one folder, e.g.:
+
+```
 npx --yes newman run postman/marvel-hospitality.postman_collection.json \
   -e postman/local.postman_environment.json --folder "Demo: bank transfer paid in two parts"
-
-npx --yes newman run postman/marvel-hospitality.postman_collection.json \
-  -e postman/local.postman_environment.json --folder "Demo: booking rules"
-
-npx --yes newman run postman/marvel-hospitality.postman_collection.json \
-  -e postman/local.postman_environment.json --folder "Demo: unmatched payments"
-
-npx --yes newman run postman/marvel-hospitality.postman_collection.json \
-  -e postman/local.postman_environment.json --folder "Demo: refunds"
-
-npx --yes newman run postman/marvel-hospitality.postman_collection.json \
-  -e postman/local.postman_environment.json --folder "Demo: notifications"
-```
-
-Run against a live `infra` (`make up`) to get real tokens; against the application folders it also needs
-`make up-apps`. The **Reservations** folder needs a token first, e.g.:
-
-```
-npx --yes newman run postman/marvel-hospitality.postman_collection.json \
-  -e postman/local.postman_environment.json --folder "Get token (alice)" \
-  --export-environment /tmp/marvel-env.json
-
-npx --yes newman run postman/marvel-hospitality.postman_collection.json \
-  -e /tmp/marvel-env.json --folder "Reservations"
 ```
