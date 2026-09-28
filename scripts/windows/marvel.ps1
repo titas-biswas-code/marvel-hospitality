@@ -53,12 +53,31 @@ function Initialize-EnvFile {
     }
 }
 
+# Why the Docker engine does not answer, in the order it usually happens on a fresh Windows machine.
+function Show-EngineHelp {
+    if ($OnWindows) {
+        & wsl.exe --status *> $null
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "  WSL is not installed; Docker Desktop needs it. In a PowerShell opened as Administrator run" -ForegroundColor Yellow
+            Write-Host "    wsl --install --no-distribution" -ForegroundColor Yellow
+            Write-Host "  then restart Windows and start Docker Desktop." -ForegroundColor Yellow
+        }
+    }
+    Write-Host "  Start Docker Desktop and wait until it reports 'Engine running'. If it says virtualization support was"
+    Write-Host "  not detected: install WSL as above; inside a virtual machine also enable nested virtualization"
+    Write-Host "  (Proxmox: CPU type 'host', then a full stop and start of the VM)."
+}
+
 function Assert-Docker {
     if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
         Fail "Docker is not installed. Run .\marvel init for what to install."
     }
     $os = & docker version --format '{{.Server.Os}}' 2>$null
-    if ($LASTEXITCODE -ne 0) { Fail "the Docker engine does not answer. Start Docker Desktop and try again." }
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "error: the Docker engine does not answer." -ForegroundColor Red
+        Show-EngineHelp
+        exit 1
+    }
     if ($os -ne 'linux') { Fail "Docker Desktop runs Windows containers. Switch it to Linux containers (tray icon menu)." }
 }
 
@@ -137,13 +156,16 @@ function Invoke-Init {
     if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
         Write-Host "[missing] Docker Desktop" -ForegroundColor Red
         Write-Host "  Install it from https://docs.docker.com/desktop/setup/install/windows-install/"
-        Write-Host "  Its installer sets up the WSL 2 (or Hyper-V) backend it needs; this script does not."
+        Write-Host "  It needs WSL 2: in a PowerShell opened as Administrator run 'wsl --install --no-distribution' and"
+        Write-Host "  restart Windows (the default, administrator install of Docker Desktop does this for you)."
         Write-Host "  Inside a virtual machine, enable nested virtualization first (Proxmox: CPU type 'host')."
         exit 1
     }
     $os = & docker version --format '{{.Server.Os}}' 2>$null
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "[missing] Docker engine not running: start Docker Desktop, then run .\marvel init again." -ForegroundColor Red
+        Write-Host "[missing] The Docker engine does not answer." -ForegroundColor Red
+        Show-EngineHelp
+        Write-Host "  Then run .\marvel init again."
         exit 1
     }
     if ($os -ne 'linux') {
