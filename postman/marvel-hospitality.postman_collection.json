@@ -2796,6 +2796,7 @@
                   "        pm.expect(payments[0].refund.reason).to.eql(\"OVERPAYMENT\");",
                   "    });",
                   "    pm.environment.set(\"b3_refund_id\", payments[0].refund.refundId);",
+                  "    pm.environment.set(\"refund_id\", payments[0].refund.refundId);",
                   "}"
                 ]
               }
@@ -4031,6 +4032,82 @@
       "name": "room-reservation-service",
       "item": [
         {
+          "name": "Get token (alice)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "password",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "marvel-postman",
+                  "type": "text"
+                },
+                {
+                  "key": "username",
+                  "value": "alice",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "{{password}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{keycloak_url}}/realms/marvel/protocol/openid-connect/token",
+              "host": [
+                "{{keycloak_url}}"
+              ],
+              "path": [
+                "realms",
+                "marvel",
+                "protocol",
+                "openid-connect",
+                "token"
+              ]
+            },
+            "description": "Fetches alice's token first, so this folder runs on its own (Run folder) and in a full collection run."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "",
+                  "pm.test(\"Response has access_token\", function () {",
+                  "    pm.expect(json.access_token).to.be.a(\"string\").and.not.empty;",
+                  "});",
+                  "",
+                  "pm.environment.set(\"access_token\", json.access_token);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
           "name": "whoami",
           "request": {
             "method": "GET",
@@ -4656,6 +4733,77 @@
       "name": "bank-transfer-payment-service",
       "item": [
         {
+          "name": "Get token (bank-simulator, client credentials)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "client_credentials",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "bank-simulator",
+                  "type": "text"
+                },
+                {
+                  "key": "client_secret",
+                  "value": "{{bank_simulator_client_secret}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{keycloak_url}}/realms/marvel/protocol/openid-connect/token",
+              "host": [
+                "{{keycloak_url}}"
+              ],
+              "path": [
+                "realms",
+                "marvel",
+                "protocol",
+                "openid-connect",
+                "token"
+              ]
+            },
+            "description": "Fetches the bank-simulator token (bank:ingest, bank:read) first, so this folder runs on its own and in a full collection run."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "",
+                  "pm.test(\"Response has access_token\", function () {",
+                  "    pm.expect(json.access_token).to.be.a(\"string\").and.not.empty;",
+                  "});",
+                  "",
+                  "pm.environment.set(\"access_token\", json.access_token);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
           "name": "whoami",
           "request": {
             "method": "GET",
@@ -5064,6 +5212,19 @@
               },
               "event": [
                 {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// Needs {{refund_id}} from an earlier request; skipped (not failed) when this folder runs on its own.",
+                      "if (!pm.environment.get(\"refund_id\")) {",
+                      "    console.log(\"Skipping: no refund_id yet; run 'Demo: refunds' or 'List payments of a reservation' for a refunded reservation first\");",
+                      "    pm.execution.skipRequest();",
+                      "}"
+                    ]
+                  }
+                },
+                {
                   "listen": "test",
                   "script": {
                     "type": "text/javascript",
@@ -5097,6 +5258,82 @@
     {
       "name": "notification-service",
       "item": [
+        {
+          "name": "Get token (alice)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "password",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "marvel-postman",
+                  "type": "text"
+                },
+                {
+                  "key": "username",
+                  "value": "alice",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "{{password}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{keycloak_url}}/realms/marvel/protocol/openid-connect/token",
+              "host": [
+                "{{keycloak_url}}"
+              ],
+              "path": [
+                "realms",
+                "marvel",
+                "protocol",
+                "openid-connect",
+                "token"
+              ]
+            },
+            "description": "Fetches alice's token first, so this folder runs on its own and in a full collection run."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "",
+                  "pm.test(\"Response has access_token\", function () {",
+                  "    pm.expect(json.access_token).to.be.a(\"string\").and.not.empty;",
+                  "});",
+                  "",
+                  "pm.environment.set(\"access_token\", json.access_token);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
         {
           "name": "whoami",
           "request": {
@@ -5209,6 +5446,19 @@
               },
               "event": [
                 {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// Needs {{reservationId}} from an earlier request; skipped (not failed) when this folder runs on its own.",
+                      "if (!pm.environment.get(\"reservationId\")) {",
+                      "    console.log(\"Skipping: no reservationId yet; run a create request in room-reservation-service first\");",
+                      "    pm.execution.skipRequest();",
+                      "}"
+                    ]
+                  }
+                },
+                {
                   "listen": "test",
                   "script": {
                     "type": "text/javascript",
@@ -5277,6 +5527,77 @@
               "response": []
             },
             {
+              "name": "Get token (bank-simulator, client credentials)",
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/x-www-form-urlencoded"
+                  }
+                ],
+                "body": {
+                  "mode": "urlencoded",
+                  "urlencoded": [
+                    {
+                      "key": "grant_type",
+                      "value": "client_credentials",
+                      "type": "text"
+                    },
+                    {
+                      "key": "client_id",
+                      "value": "bank-simulator",
+                      "type": "text"
+                    },
+                    {
+                      "key": "client_secret",
+                      "value": "{{bank_simulator_client_secret}}",
+                      "type": "text"
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{keycloak_url}}/realms/marvel/protocol/openid-connect/token",
+                  "host": [
+                    "{{keycloak_url}}"
+                  ],
+                  "path": [
+                    "realms",
+                    "marvel",
+                    "protocol",
+                    "openid-connect",
+                    "token"
+                  ]
+                },
+                "description": "The next request needs a token without reservation:read: the bank-simulator service account has only bank:ingest and bank:read."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "const json = pm.response.json();",
+                      "",
+                      "pm.test(\"Response has access_token\", function () {",
+                      "    pm.expect(json.access_token).to.be.a(\"string\").and.not.empty;",
+                      "});",
+                      "",
+                      "pm.environment.set(\"access_token\", json.access_token);"
+                    ]
+                  }
+                }
+              ],
+              "response": []
+            },
+            {
               "name": "List notifications without reservation:read → 403",
               "request": {
                 "method": "GET",
@@ -5296,9 +5617,22 @@
                     }
                   ]
                 },
-                "description": "Run 'Get token (bank-simulator, client credentials)' from the Auth folder first: the bank-simulator service account only has bank:ingest and bank:read, no reservation:read. Expects 403 ProblemDetail, code FORBIDDEN."
+                "description": "Uses the bank-simulator token fetched just before (no reservation:read). Expects 403 ProblemDetail, code FORBIDDEN."
               },
               "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// Needs {{reservationId}} from an earlier request; skipped (not failed) when this folder runs on its own.",
+                      "if (!pm.environment.get(\"reservationId\")) {",
+                      "    console.log(\"Skipping: no reservationId yet; run a create request in room-reservation-service first\");",
+                      "    pm.execution.skipRequest();",
+                      "}"
+                    ]
+                  }
+                },
                 {
                   "listen": "test",
                   "script": {
