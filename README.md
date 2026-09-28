@@ -163,8 +163,10 @@ cd marvel-hospitality
 .\marvel smoke        # optional: the end-to-end check, about a minute
 ```
 `.\marvel help` lists every command; each mirrors a `make` target. Scripts that need bash, curl or jq run in a small
-`tools` container, so they behave the same everywhere. Docker Desktop needs virtualization: inside a virtual machine,
-enable nested virtualization (Proxmox: CPU type `host`) and give the VM about 16 GB of memory.
+`tools` container, so they behave the same everywhere. Docker Desktop needs WSL 2: if it reports that virtualization
+support was not detected, run `wsl --install --no-distribution` in a PowerShell opened as Administrator and restart
+Windows. Inside a virtual machine, also enable nested virtualization (Proxmox: CPU type `host`, then stop and start
+the VM) and give it about 16 GB of memory.
 
 | What | Where |
 |---|---|
